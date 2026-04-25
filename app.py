@@ -1,100 +1,59 @@
-"""
-Tunnel Digital Twin — Operator Dashboard
-Diagnostic version: surfaces all import/startup errors visibly.
-"""
-
 import streamlit as st
-import traceback
 import sys
 
-st.set_page_config(
-    page_title="Tunnel DT — Transurban",
-    page_icon="🛣️",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+st.set_page_config(page_title="Diagnostic", layout="wide")
+st.title("Hello from Streamlit Cloud")
+st.success("If you can see this, the platform is working.")
+st.write(f"Python version: {sys.version}")
+st.write(f"Streamlit version: {st.__version__}")
 
-# -----------------------------------------------------------------------------
-# Wrap the whole startup in a try/except so errors surface to the page
-# -----------------------------------------------------------------------------
+st.divider()
+st.subheader("Try importing each project module")
+
+modules_to_test = [
+    "rdflib",
+    "owlrl",
+    "pandas",
+    "plotly",
+]
+
+for mod in modules_to_test:
+    try:
+        __import__(mod)
+        st.success(f"✅ `{mod}` imports successfully")
+    except Exception as e:
+        st.error(f"❌ `{mod}` FAILED: {e}")
+
+st.divider()
+st.subheader("Try importing project utils")
+
+import_tests = [
+    ("utils", "from utils import sparql_queries"),
+    ("ontology_loader", "from utils.ontology_loader import load_ontology"),
+    ("fmea_chain", "from utils.fmea_chain import compute_completeness"),
+    ("cv_to_cobie", "from utils.cv_to_cobie import convert_cv_output_to_cobie_rows"),
+    ("styling", "from utils.styling import apply_custom_css"),
+]
+
+for name, statement in import_tests:
+    try:
+        exec(statement)
+        st.success(f"✅ `{name}` imports successfully")
+    except Exception as e:
+        st.error(f"❌ `{name}` FAILED: {e}")
+        import traceback
+        st.code(traceback.format_exc(), language="python")
+
+st.divider()
+st.subheader("Try loading ontology and data")
+
 try:
-    from pathlib import Path
     from utils.ontology_loader import load_ontology, load_defects
-    from utils.styling import apply_custom_css
-
-    apply_custom_css()
-
-    # Session state
-    if "ontology_loaded" not in st.session_state:
-        st.session_state.ontology_loaded = False
-    if "selected_defect_id" not in st.session_state:
-        st.session_state.selected_defect_id = None
-    if "current_tunnel" not in st.session_state:
-        st.session_state.current_tunnel = "Tunnel_A"
-
-    with st.sidebar:
-        st.markdown("### 🛣️ Tunnel DT")
-        st.caption("Serviceability-Oriented Digital Twin")
-        st.divider()
-
-        tunnel_choice = st.selectbox(
-            "Active tunnel",
-            options=["Tunnel_A", "Tunnel_B", "Tunnel_C"],
-            index=0,
-        )
-        st.session_state.current_tunnel = tunnel_choice
-
-        st.divider()
-
-        if not st.session_state.ontology_loaded:
-            with st.spinner("Loading ontology..."):
-                g = load_ontology()
-                defects = load_defects(g)
-                st.session_state.graph = g
-                st.session_state.defects = defects
-                st.session_state.ontology_loaded = True
-
-        st.markdown("**Ontology status**")
-        st.success(f"✓ Loaded — {len(st.session_state.graph)} triples")
-        st.caption(f"{len(st.session_state.defects)} defect instances")
-
-    st.title("Tunnel A — operational overview")
-    st.caption(
-        "Defects detected, prioritised, and traced to FMEA chains. "
-        "Data as of inspection campaign 2024-03-15."
-    )
-
-    defects = st.session_state.defects
-    active_defects = [d for d in defects if d.get("status") == "Active"]
-    high_priority = [d for d in active_defects if d.get("priority") == "HIGH"]
-    completeness_ok = [
-        d for d in active_defects if d.get("completeness_score", 0) >= 0.75
-    ]
-    total_cost = sum(d.get("estimated_cost_aud", 0) for d in active_defects)
-
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Active defects", len(active_defects))
-    with col2:
-        st.metric("High priority", len(high_priority))
-    with col3:
-        coverage_pct = (
-            int(100 * len(completeness_ok) / len(active_defects))
-            if active_defects else 0
-        )
-        st.metric("FMEA coverage", f"{coverage_pct}%")
-    with col4:
-        st.metric("Est. cost", f"${total_cost / 1e6:.2f}M")
-
-    st.divider()
-    st.info(
-        "Use the **Pages** menu in the sidebar to navigate."
-    )
-
+    g = load_ontology()
+    st.success(f"✅ Ontology loaded: {len(g)} triples")
+    defects = load_defects(g)
+    st.success(f"✅ Defects loaded: {len(defects)} instances")
 except Exception as e:
-    st.error("⚠️ The app crashed during startup. Traceback below:")
-    st.exception(e)
+    st.error(f"❌ Data loading FAILED: {e}")
+    import traceback
     st.code(traceback.format_exc(), language="python")
-    st.markdown("---")
-    st.markdown(f"**Python version:** `{sys.version}`")
-    st.markdown(f"**Working directory:** `{Path.cwd() if 'Path' in dir() else 'unknown'}`")
