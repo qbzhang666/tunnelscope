@@ -1,0 +1,216 @@
+[
+  {
+    "defect_id": "D-1247-L",
+    "defect_type": "LeakingJoints",
+    "description": "Leaking construction joint with void behind lining",
+    "ring_id": 1247,
+    "chainage_m": 849.82,
+    "position": "Right sidewall lower",
+    "discovered_on": "2024-03-15",
+    "severity": "Medium",
+    "priority": "HIGH",
+    "completeness_score": 1.0,
+    "status": "Active",
+    "failure_mechanism": "Groundwater intrusion through construction joint",
+    "potential_cause": "Hydrostatic pressure driving water through void behind lining",
+    "threshold_triggered": "GS moisture with void evidence — sequenced repair required",
+    "threshold_reference": "AASHTO Ch16 §16.3.2",
+    "indicators_summary": "Extent 63.4 cm² (RGBD), active leak ΔT -2.8°C (Thermal), void 36.3 cm depth (GPR)",
+    "estimated_cost_aud": 18200,
+    "deadline_days": 30,
+    "modality_evidence": {
+      "RGB": {"status": "Confirmed", "finding": "GS moisture, 0.58m trail", "fmea_level": "Indicator", "confidence": 0.92},
+      "RGBD": {"status": "Measured", "finding": "Extent 63.4 cm²", "fmea_level": "Indicator", "confidence": 0.95},
+      "Thermal": {"status": "Active leak", "finding": "ΔT -2.8°C at source", "fmea_level": "Cause", "confidence": 0.87},
+      "GPR": {"status": "Void detected", "finding": "36.3cm depth, 25cm wide", "fmea_level": "Structure", "confidence": 0.79}
+    },
+    "prescribed_interventions": [
+      {"step": "Formation grouting through void", "rationale": "Required by GPR-detected void. Skipping this causes surface repair to fail.", "reference": "Domain practice"},
+      {"step": "Wait 48-72 hours for grout cure", "rationale": "Material-dependent", "reference": "Supplier spec"},
+      {"step": "Surface sealing at construction joint with polyurethane grout", "rationale": "Standard joint sealing", "reference": "AASHTO Ch16 §16.3.2"},
+      {"step": "Leak verification test after 7 days (RGB + thermal)", "rationale": "Confirms pathway eliminated", "reference": "QA protocol"}
+    ]
+  },
+  {
+    "defect_id": "D-1158-S",
+    "defect_type": "Spalls",
+    "description": "S-3 spall with rebar exposed and suspected section loss",
+    "ring_id": 1158,
+    "chainage_m": 772.0,
+    "position": "Crown",
+    "discovered_on": "2024-03-15",
+    "severity": "S-3",
+    "priority": "HIGH",
+    "completeness_score": 0.75,
+    "status": "Active",
+    "failure_mechanism": "Corrosion-induced spalling of concrete lining",
+    "potential_cause": "Chloride-induced rebar corrosion with section loss",
+    "threshold_triggered": "S-3 spall triggers structural analysis per AASHTO §16.4.3",
+    "threshold_reference": "AASHTO Ch16 §16.4.3",
+    "indicators_summary": "Spall depth 58mm (RGBD), rebar exposed (RGB), reduced cover 28mm (GPR)",
+    "estimated_cost_aud": 34800,
+    "deadline_days": 30,
+    "modality_evidence": {
+      "RGB": {"status": "Confirmed", "finding": "Visible spall, exposed rebar", "fmea_level": "Indicator", "confidence": 0.88},
+      "RGBD": {"status": "Measured", "finding": "Depth 58mm, area 112 cm²", "fmea_level": "Indicator", "confidence": 0.93},
+      "Thermal": {"status": "Not deployed", "finding": null, "fmea_level": null, "confidence": 0.0},
+      "GPR": {"status": "Cover reduced", "finding": "Rebar cover 28mm (designed 45mm)", "fmea_level": "Structure", "confidence": 0.82}
+    },
+    "prescribed_interventions": [
+      {"step": "Measure actual rebar section loss at repair site", "rationale": "Required by AASHTO §16.4.3 for S-3", "reference": "AASHTO Ch16 §16.4.3"},
+      {"step": "If section loss > 30% — structural analysis required", "rationale": "May require full segment replacement", "reference": "AASHTO Ch16 §16.4.3"},
+      {"step": "Remove unsound concrete with chipping hammers <30 lb", "rationale": "Avoid further damage", "reference": "AASHTO Ch16 §16.4"},
+      {"step": "Clean rebar to white metal, apply zinc coating within 48 hrs", "rationale": "Corrosion prevention", "reference": "AASHTO Ch16 §16.4"},
+      {"step": "Rebuild with mechanical couplers — NOT lap splices", "rationale": "Structural requirement for S-3", "reference": "AASHTO Ch16 §16.4.3"}
+    ]
+  },
+  {
+    "defect_id": "D-0923-C",
+    "defect_type": "Cracks",
+    "description": "Active diagonal crack, 0.9mm wide, moisture M",
+    "ring_id": 923,
+    "chainage_m": 615.3,
+    "position": "Left sidewall lower",
+    "discovered_on": "2024-03-15",
+    "severity": "Medium",
+    "priority": "HIGH",
+    "completeness_score": 0.5,
+    "status": "Active",
+    "failure_mechanism": "Structural cracking from differential settlement",
+    "potential_cause": "Ground movement — active; root cause investigation required",
+    "threshold_triggered": "Active crack — DO NOT rebond; investigate cause first",
+    "threshold_reference": "AASHTO Ch16 §16.5",
+    "indicators_summary": "Width 0.9mm (RGBD), M moisture (RGB)",
+    "estimated_cost_aud": 0,
+    "deadline_days": null,
+    "modality_evidence": {
+      "RGB": {"status": "Confirmed", "finding": "Diagonal crack pattern, M moisture", "fmea_level": "Indicator", "confidence": 0.89},
+      "RGBD": {"status": "Measured", "finding": "Width 0.9mm, length 2.4m", "fmea_level": "Indicator", "confidence": 0.94},
+      "Thermal": {"status": "Not deployed", "finding": null, "fmea_level": null, "confidence": 0.0},
+      "GPR": {"status": "Not deployed", "finding": null, "fmea_level": null, "confidence": 0.0}
+    },
+    "prescribed_interventions": [
+      {"step": "DO NOT rebond active crack", "rationale": "Rebonding causes repair failure", "reference": "AASHTO Ch16 §16.5"},
+      {"step": "Install crack monitoring (grid gauge or LVDT) for 90 days", "rationale": "Confirm movement state", "reference": "AASHTO Ch15 instrumentation catalogue"},
+      {"step": "Investigate root cause: settlement, overloading, ground movement", "rationale": "Address cause before structural repair", "reference": "AASHTO Ch16 §16.5"}
+    ]
+  },
+  {
+    "defect_id": "D-1402-L",
+    "defect_type": "LeakingJoints",
+    "description": "Leaking construction joint, M moisture state",
+    "ring_id": 1402,
+    "chainage_m": 934.7,
+    "position": "Crown",
+    "discovered_on": "2024-03-15",
+    "severity": "Low",
+    "priority": "MEDIUM",
+    "completeness_score": 0.75,
+    "status": "Active",
+    "failure_mechanism": "Minor groundwater seepage at construction joint",
+    "potential_cause": "Joint sealant degradation",
+    "threshold_triggered": "M moisture — thermal investigation recommended",
+    "threshold_reference": "AASHTO Ch16 Table 16-1",
+    "indicators_summary": "M moisture (RGB), slight thermal signature (Thermal), no void (GPR)",
+    "estimated_cost_aud": 8500,
+    "deadline_days": 90,
+    "modality_evidence": {
+      "RGB": {"status": "Confirmed", "finding": "M moisture, no active flow", "fmea_level": "Indicator", "confidence": 0.85},
+      "RGBD": {"status": "Not deployed", "finding": null, "fmea_level": null, "confidence": 0.0},
+      "Thermal": {"status": "Slight signature", "finding": "ΔT -0.8°C, marginal", "fmea_level": "Cause", "confidence": 0.71},
+      "GPR": {"status": "No void", "finding": "Clean interface", "fmea_level": "Structure", "confidence": 0.88}
+    },
+    "prescribed_interventions": [
+      {"step": "Surface sealant refresh at joint", "rationale": "M moisture with no void", "reference": "Standard practice"},
+      {"step": "Re-inspect in 6 months", "rationale": "Monitor progression", "reference": "QA protocol"}
+    ]
+  },
+  {
+    "defect_id": "D-0756-C",
+    "defect_type": "Cracks",
+    "description": "Transverse crack, dormant, 0.4mm wide, dry",
+    "ring_id": 756,
+    "chainage_m": 504.2,
+    "position": "Right sidewall",
+    "discovered_on": "2024-03-15",
+    "severity": "Low",
+    "priority": "MEDIUM",
+    "completeness_score": 0.5,
+    "status": "Active",
+    "failure_mechanism": "Shrinkage or thermal cracking",
+    "potential_cause": "Construction-phase shrinkage (dormant)",
+    "threshold_triggered": "Dormant crack, dry — epoxy rebond appropriate",
+    "threshold_reference": "AASHTO Ch16 §16.5",
+    "indicators_summary": "Width 0.4mm (RGBD), dry D state (RGB), no movement (monitoring 90d)",
+    "estimated_cost_aud": 2100,
+    "deadline_days": 180,
+    "modality_evidence": {
+      "RGB": {"status": "Confirmed", "finding": "Transverse crack, dry", "fmea_level": "Indicator", "confidence": 0.90},
+      "RGBD": {"status": "Measured", "finding": "Width 0.4mm, length 1.8m", "fmea_level": "Indicator", "confidence": 0.93},
+      "Thermal": {"status": "Not deployed", "finding": null, "fmea_level": null, "confidence": 0.0},
+      "GPR": {"status": "Not deployed", "finding": null, "fmea_level": null, "confidence": 0.0}
+    },
+    "prescribed_interventions": [
+      {"step": "Structural epoxy injection (low pressure)", "rationale": "Crack is dormant — safe to rebond", "reference": "AASHTO Ch16 §16.5"},
+      {"step": "Port injection technique", "rationale": "Ensures full penetration", "reference": "Supplier spec"}
+    ]
+  },
+  {
+    "defect_id": "D-1089-C",
+    "defect_type": "Cracks",
+    "description": "Transverse hairline crack, dry",
+    "ring_id": 1089,
+    "chainage_m": 726.0,
+    "position": "Crown",
+    "discovered_on": "2024-03-15",
+    "severity": "Minor",
+    "priority": "LOW",
+    "completeness_score": 0.25,
+    "status": "Active",
+    "failure_mechanism": "Hairline shrinkage cracking",
+    "potential_cause": "Early-age thermal or drying shrinkage",
+    "threshold_triggered": "Below action threshold — monitor only",
+    "threshold_reference": "AS 3600",
+    "indicators_summary": "Hairline (<0.1mm) (RGB only)",
+    "estimated_cost_aud": 0,
+    "deadline_days": null,
+    "modality_evidence": {
+      "RGB": {"status": "Confirmed", "finding": "Hairline, dry D state", "fmea_level": "Indicator", "confidence": 0.78},
+      "RGBD": {"status": "Below resolution", "finding": null, "fmea_level": null, "confidence": 0.0},
+      "Thermal": {"status": "Not deployed", "finding": null, "fmea_level": null, "confidence": 0.0},
+      "GPR": {"status": "Not deployed", "finding": null, "fmea_level": null, "confidence": 0.0}
+    },
+    "prescribed_interventions": [
+      {"step": "Record location, monitor in next inspection cycle", "rationale": "Below intervention threshold", "reference": "AS 3600"}
+    ]
+  },
+  {
+    "defect_id": "D-0614-L",
+    "defect_type": "Staining",
+    "description": "PM calcification, historical leak (no active moisture)",
+    "ring_id": 614,
+    "chainage_m": 410.1,
+    "position": "Left sidewall",
+    "discovered_on": "2024-03-15",
+    "severity": "Minor",
+    "priority": "LOW",
+    "completeness_score": 0.75,
+    "status": "Active",
+    "failure_mechanism": "Past moisture migration (now sealed)",
+    "potential_cause": "Historical leak, since addressed",
+    "threshold_triggered": "PM state — cosmetic cleaning only",
+    "threshold_reference": "AASHTO Ch16 Table 16-1",
+    "indicators_summary": "PM staining (RGB), no thermal signature, no void",
+    "estimated_cost_aud": 1200,
+    "deadline_days": 365,
+    "modality_evidence": {
+      "RGB": {"status": "Confirmed", "finding": "PM calcification deposits", "fmea_level": "Indicator", "confidence": 0.87},
+      "RGBD": {"status": "Not deployed", "finding": null, "fmea_level": null, "confidence": 0.0},
+      "Thermal": {"status": "No signature", "finding": "ΔT < 0.2°C", "fmea_level": "Cause", "confidence": 0.90},
+      "GPR": {"status": "Clean", "finding": "No void, no moisture reflection", "fmea_level": "Structure", "confidence": 0.85}
+    },
+    "prescribed_interventions": [
+      {"step": "Cosmetic surface cleaning (pressure wash or chemical)", "rationale": "Aesthetic only", "reference": "Maintenance manual"}
+    ]
+  }
+]

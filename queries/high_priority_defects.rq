@@ -1,0 +1,15 @@
+PREFIX tun: <http://tunnel-dt.transurban.com/ontology/v1.2#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+# Find all HIGH priority defects across the tunnel
+
+SELECT ?defect ?ring ?chainage ?type ?priority ?cost
+WHERE {
+    ?defect rdf:type tun:DefectCondition ;
+            tun:hasPriority "HIGH" ;
+            tun:atRingID ?ring ;
+            tun:atChainage ?chainage ;
+            tun:hasType ?type .
+    OPTIONAL { ?defect tun:estimatedCost ?cost . }
+}
+ORDER BY ?chainage

@@ -1,0 +1,47 @@
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix cobie: <http://tunnel-dt.transurban.com/cobie#> .
+
+<http://tunnel-dt.transurban.com/cobie> a owl:Ontology ;
+    rdfs:comment "COBie-extended ontology for tunnel asset records." .
+
+# Core COBie sheets as OWL classes
+cobie:Facility a owl:Class .
+cobie:Floor a owl:Class .
+cobie:Space a owl:Class .
+cobie:Zone a owl:Class .
+cobie:Component a owl:Class .
+cobie:Type a owl:Class .
+cobie:System a owl:Class .
+cobie:Job a owl:Class .
+cobie:Resource a owl:Class .
+cobie:Spare a owl:Class .
+
+# Extended sheets for maintenance
+cobie:MaintenanceAction a owl:Class .
+cobie:Defect a owl:Class .
+cobie:DefectType a owl:Class .
+cobie:RealTimeData a owl:Class .
+cobie:Inspection a owl:Class .
+
+# Key properties
+cobie:ComponentName a owl:DatatypeProperty ;
+    rdfs:domain cobie:Component ;
+    rdfs:range xsd:string .
+
+cobie:CurrentMileage a owl:DatatypeProperty ;
+    rdfs:domain cobie:Space ;
+    rdfs:range xsd:decimal .
+
+cobie:CurrentLane a owl:DatatypeProperty ;
+    rdfs:domain cobie:Space ;
+    rdfs:range xsd:string .
+
+cobie:CreatedOn a owl:DatatypeProperty .
+cobie:CreatedBy a owl:DatatypeProperty .
+cobie:Description a owl:DatatypeProperty .
+cobie:Degree a owl:DatatypeProperty .
+cobie:SourceName a owl:DatatypeProperty .
+cobie:RealTimeDataValue a owl:DatatypeProperty .

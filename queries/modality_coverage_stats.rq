@@ -1,0 +1,12 @@
+PREFIX tun: <http://tunnel-dt.transurban.com/ontology/v1.2#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+# Count defects detected by each modality
+
+SELECT ?modality (COUNT(?defect) AS ?defectCount)
+WHERE {
+    ?defect rdf:type tun:DefectCondition ;
+            tun:detectedBy ?modality .
+}
+GROUP BY ?modality
+ORDER BY DESC(?defectCount)

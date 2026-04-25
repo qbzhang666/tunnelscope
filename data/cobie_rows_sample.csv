@@ -1,0 +1,7 @@
+sheet,Name,CreatedBy,CreatedOn,Degree,SourceName,DefectTypeName,ComponentName,ExtSystem,ExtObject,ExtIdentifier,Description,RealTimeDataValue,ComponetName
+COBie.Defect,DEFECT-TUN-A-a1b2c3d4,cv_pipeline_v2.3,2024-03-15T11:23:45Z,HIGH,AutomatedVisualInspection,LeakingJoints,Ring_1277,RGB_CV_Pipeline,/surveys/TunnelA/2024-03-15/IMG_00847.jpg,mask_001,"CNN confidence 0.92; chainage K852+000; RightSideWall_Lower; moisture GS",,
+COBie.RealTimeData,MEAS-moist-e5f6g7h8,,,,,,,RGB_MoistureClassifier,,,,"GS",Ring_1277
+COBie.RealTimeData,MEAS-area-i9j0k1l2,,,,,,,RGBD_Measurement,,DEFECT-TUN-A-a1b2c3d4_DefectExtent,,"63.40 cm2",Ring_1277
+COBie.Defect,DEFECT-TUN-A-m3n4o5p6,cv_pipeline_v2.3,2024-03-15T11:23:45Z,S-3,AutomatedVisualInspection,Spalls,Ring_1281,RGB_CV_Pipeline,/surveys/TunnelA/2024-03-15/IMG_00847.jpg,mask_002,"CNN confidence 0.88; chainage K852+003; Crown; moisture D",,
+COBie.RealTimeData,MEAS-moist-q7r8s9t0,,,,,,,RGB_MoistureClassifier,,,,"D",Ring_1281
+COBie.RealTimeData,MEAS-depth-u1v2w3x4,,,,,,,RGBD_Measurement,,DEFECT-TUN-A-m3n4o5p6_SpallDepth,,"58.00 mm",Ring_1281

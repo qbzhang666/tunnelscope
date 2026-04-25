@@ -1,0 +1,20 @@
+PREFIX tun: <http://tunnel-dt.transurban.com/ontology/v1.2#>
+
+# Traverse the full FMEA reasoning chain for a specific defect
+# Replace {DEFECT_ID} with the target defect identifier
+
+SELECT ?component ?mechanism ?indicator ?indValue
+       ?cause ?intervention ?sourceRef
+WHERE {
+    tun:{DEFECT_ID} tun:atComponent ?component ;
+                    tun:hasMechanism ?mechanism .
+    OPTIONAL {
+        tun:{DEFECT_ID} tun:hasIndicator ?indicator .
+        ?indicator tun:indicatorValue ?indValue .
+    }
+    OPTIONAL { tun:{DEFECT_ID} tun:hasPotentialCause ?cause . }
+    OPTIONAL {
+        tun:{DEFECT_ID} tun:hasIntervention ?intervention .
+        ?intervention tun:sourceReference ?sourceRef .
+    }
+}

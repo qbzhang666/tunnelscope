@@ -1,0 +1,22 @@
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix rads: <http://tunnel-dt.transurban.com/rads#> .
+
+<http://tunnel-dt.transurban.com/rads> a owl:Ontology ;
+    rdfs:comment "Austroads RADS ontology layer — asset management structure." .
+
+# RADS functional groups
+rads:Inventory a owl:Class .
+rads:Condition a owl:Class .
+rads:Performance a owl:Class .
+rads:Risk a owl:Class .
+rads:WorksAndCosts a owl:Class .
+
+# Condition grading (5-level scale)
+rads:ConditionGrade a owl:Class .
+rads:CG1_Excellent a owl:Class ; rdfs:subClassOf rads:ConditionGrade .
+rads:CG2_Good a owl:Class ; rdfs:subClassOf rads:ConditionGrade .
+rads:CG3_Fair a owl:Class ; rdfs:subClassOf rads:ConditionGrade .
+rads:CG4_Poor a owl:Class ; rdfs:subClassOf rads:ConditionGrade .
+rads:CG5_VeryPoor a owl:Class ; rdfs:subClassOf rads:ConditionGrade .

@@ -1,0 +1,241 @@
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix tun: <http://tunnel-dt.transurban.com/ontology/v1.2#> .
+
+<http://tunnel-dt.transurban.com/ontology/v1.2> a owl:Ontology ;
+    dcterms:title "Road Tunnel Maintenance Ontology" ;
+    dcterms:description "Serviceability-oriented multimodal maintenance ontology for Australian road tunnels." ;
+    owl:versionInfo "1.2.0" .
+
+#################################################################
+#   Layer 1 — Asset taxonomy
+#################################################################
+
+tun:TunnelComponent a owl:Class ;
+    rdfs:comment "Top-level class for any tunnel component." .
+
+tun:StructuralComponent a owl:Class ;
+    rdfs:subClassOf tun:TunnelComponent .
+
+tun:SegmentRing a owl:Class ;
+    rdfs:subClassOf tun:StructuralComponent ;
+    rdfs:comment "Precast concrete ring forming tunnel lining." .
+
+tun:Joint a owl:Class ;
+    rdfs:subClassOf tun:StructuralComponent .
+
+tun:LongitudinalJoint a owl:Class ;
+    rdfs:subClassOf tun:Joint .
+
+tun:CircumferentialJoint a owl:Class ;
+    rdfs:subClassOf tun:Joint .
+
+tun:ServiceComponent a owl:Class ;
+    rdfs:subClassOf tun:TunnelComponent .
+
+tun:DrainageSystem a owl:Class ;
+    rdfs:subClassOf tun:ServiceComponent .
+
+#################################################################
+#   Layer 2 — Defect and deterioration model
+#################################################################
+
+tun:DefectCondition a owl:Class ;
+    rdfs:comment "Any observable defect or deterioration condition." .
+
+tun:SurfaceDefect a owl:Class ;
+    rdfs:subClassOf tun:DefectCondition .
+
+tun:Cracks a owl:Class ;
+    rdfs:subClassOf tun:SurfaceDefect .
+
+tun:Spalls a owl:Class ;
+    rdfs:subClassOf tun:SurfaceDefect .
+
+tun:LeakingJoints a owl:Class ;
+    rdfs:subClassOf tun:SurfaceDefect .
+
+tun:Staining a owl:Class ;
+    rdfs:subClassOf tun:SurfaceDefect .
+
+tun:SubsurfaceDefect a owl:Class ;
+    rdfs:subClassOf tun:DefectCondition .
+
+tun:Delaminations a owl:Class ;
+    rdfs:subClassOf tun:SubsurfaceDefect .
+
+tun:VoidBehindLining a owl:Class ;
+    rdfs:subClassOf tun:SubsurfaceDefect .
+
+tun:FailureMechanism a owl:Class .
+tun:Corrosion a owl:Class ; rdfs:subClassOf tun:FailureMechanism .
+tun:Leakage_Water a owl:Class ; rdfs:subClassOf tun:FailureMechanism .
+tun:StructuralMovement a owl:Class ; rdfs:subClassOf tun:FailureMechanism .
+tun:EnvironmentalWeathering a owl:Class ; rdfs:subClassOf tun:FailureMechanism .
+
+tun:MeasuredIndicator a owl:Class .
+tun:PotentialCause a owl:Class .
+tun:ConditionState a owl:Class .
+
+#################################################################
+#   Layer 3 — Maintenance and decision model
+#################################################################
+
+tun:Intervention a owl:Class .
+tun:EpoxyCrackInjection a owl:Class ; rdfs:subClassOf tun:Intervention .
+tun:PolyurethaneGrouting a owl:Class ; rdfs:subClassOf tun:Intervention .
+tun:FormationGrouting a owl:Class ; rdfs:subClassOf tun:Intervention .
+tun:ShotcreteRepair a owl:Class ; rdfs:subClassOf tun:Intervention .
+
+tun:StandardClause a owl:Class .
+
+#################################################################
+#   Sensing modalities
+#################################################################
+
+tun:SensingModality a owl:Class .
+tun:RGB a owl:Class ; rdfs:subClassOf tun:SensingModality .
+tun:RGBD a owl:Class ; rdfs:subClassOf tun:SensingModality .
+tun:Thermal a owl:Class ; rdfs:subClassOf tun:SensingModality .
+tun:GPR a owl:Class ; rdfs:subClassOf tun:SensingModality .
+
+tun:FMEAChainLevel a owl:Class .
+tun:DefectConditionLevel a owl:Class ; rdfs:subClassOf tun:FMEAChainLevel .
+tun:MeasuredIndicatorsLevel a owl:Class ; rdfs:subClassOf tun:FMEAChainLevel .
+tun:PotentialCauseLevel a owl:Class ; rdfs:subClassOf tun:FMEAChainLevel .
+tun:StructureLevel a owl:Class ; rdfs:subClassOf tun:FMEAChainLevel .
+
+#################################################################
+#   Object properties (relations)
+#################################################################
+
+tun:hasDefect a owl:ObjectProperty ;
+    rdfs:domain tun:TunnelComponent ;
+    rdfs:range tun:DefectCondition ;
+    rdfs:comment "Links a component to defects affecting it." .
+
+tun:hasMechanism a owl:ObjectProperty ;
+    rdfs:domain tun:DefectCondition ;
+    rdfs:range tun:FailureMechanism .
+
+tun:hasIndicator a owl:ObjectProperty ;
+    rdfs:domain tun:DefectCondition ;
+    rdfs:range tun:MeasuredIndicator .
+
+tun:hasPotentialCause a owl:ObjectProperty ;
+    rdfs:domain tun:DefectCondition ;
+    rdfs:range tun:PotentialCause .
+
+tun:hasIntervention a owl:ObjectProperty ;
+    rdfs:domain tun:DefectCondition ;
+    rdfs:range tun:Intervention .
+
+tun:detectedBy a owl:ObjectProperty ;
+    rdfs:domain tun:DefectCondition ;
+    rdfs:range tun:SensingModality .
+
+tun:atComponent a owl:ObjectProperty ;
+    rdfs:domain tun:DefectCondition ;
+    rdfs:range tun:TunnelComponent .
+
+tun:cannotDetect a owl:ObjectProperty ;
+    rdfs:domain tun:SensingModality ;
+    rdfs:range tun:DefectCondition ;
+    rdfs:comment "Explicit limitation marker for each modality." .
+
+tun:atFMEALevel a owl:ObjectProperty ;
+    rdfs:domain tun:MeasuredIndicator ;
+    rdfs:range tun:FMEAChainLevel .
+
+tun:sourceReference a owl:ObjectProperty ;
+    rdfs:domain tun:Intervention ;
+    rdfs:range tun:StandardClause .
+
+#################################################################
+#   Data properties
+#################################################################
+
+tun:atRingID a owl:DatatypeProperty ;
+    rdfs:domain tun:DefectCondition ;
+    rdfs:range xsd:integer .
+
+tun:atChainage a owl:DatatypeProperty ;
+    rdfs:domain tun:DefectCondition ;
+    rdfs:range xsd:decimal .
+
+tun:hasType a owl:DatatypeProperty ;
+    rdfs:domain tun:DefectCondition ;
+    rdfs:range xsd:string .
+
+tun:atPosition a owl:DatatypeProperty ;
+    rdfs:domain tun:DefectCondition ;
+    rdfs:range xsd:string .
+
+tun:hasSeverity a owl:DatatypeProperty ;
+    rdfs:domain tun:DefectCondition ;
+    rdfs:range xsd:string .
+
+tun:hasPriority a owl:DatatypeProperty ;
+    rdfs:domain tun:DefectCondition ;
+    rdfs:range xsd:string .
+
+tun:estimatedCost a owl:DatatypeProperty ;
+    rdfs:domain tun:DefectCondition ;
+    rdfs:range xsd:decimal .
+
+tun:completenessScore a owl:DatatypeProperty ;
+    rdfs:domain tun:DefectCondition ;
+    rdfs:range xsd:decimal .
+
+tun:hasDescription a owl:DatatypeProperty ;
+    rdfs:domain tun:DefectCondition ;
+    rdfs:range xsd:string .
+
+tun:indicatorValue a owl:DatatypeProperty ;
+    rdfs:domain tun:MeasuredIndicator ;
+    rdfs:range xsd:string .
+
+#################################################################
+#   Modality limitation axioms (multimodal mapping table)
+#################################################################
+
+tun:RGB tun:cannotDetect tun:Delaminations ;
+        tun:cannotDetect tun:VoidBehindLining .
+
+tun:RGBD tun:cannotDetect tun:Delaminations ;
+         tun:cannotDetect tun:VoidBehindLining .
+
+tun:Thermal tun:cannotDetect tun:Cracks .
+
+#################################################################
+#   Example instance: D-1247-L (demonstrates ABox population)
+#################################################################
+
+tun:D-1247-L a tun:LeakingJoints , owl:NamedIndividual ;
+    tun:hasType "LeakingJoints" ;
+    tun:atRingID 1247 ;
+    tun:atChainage 849.82 ;
+    tun:atPosition "Right sidewall lower" ;
+    tun:hasSeverity "Medium" ;
+    tun:hasPriority "HIGH" ;
+    tun:estimatedCost 18200 ;
+    tun:completenessScore 1.0 ;
+    tun:hasDescription "Leaking construction joint with void behind lining" ;
+    tun:hasMechanism tun:Leakage_Water ;
+    tun:detectedBy tun:RGB , tun:RGBD , tun:Thermal , tun:GPR .
+
+tun:D-1158-S a tun:Spalls , owl:NamedIndividual ;
+    tun:hasType "Spalls" ;
+    tun:atRingID 1158 ;
+    tun:atChainage 772.0 ;
+    tun:atPosition "Crown" ;
+    tun:hasSeverity "S-3" ;
+    tun:hasPriority "HIGH" ;
+    tun:estimatedCost 34800 ;
+    tun:completenessScore 0.75 ;
+    tun:hasDescription "S-3 spall with rebar exposed and suspected section loss" ;
+    tun:hasMechanism tun:Corrosion ;
+    tun:detectedBy tun:RGB , tun:RGBD , tun:GPR .

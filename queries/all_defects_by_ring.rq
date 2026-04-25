@@ -1,0 +1,16 @@
+PREFIX tun: <http://tunnel-dt.transurban.com/ontology/v1.2#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+# Find all defects at a specific ring ID
+# Replace {RING_ID} with the target ring number
+
+SELECT ?defect ?type ?mechanism ?severity ?priority
+WHERE {
+    ?defect rdf:type tun:DefectCondition ;
+            tun:atRingID {RING_ID} ;
+            tun:hasType ?type ;
+            tun:hasMechanism ?mechanism .
+    OPTIONAL { ?defect tun:hasSeverity ?severity . }
+    OPTIONAL { ?defect tun:hasPriority ?priority . }
+}
+ORDER BY DESC(?priority)

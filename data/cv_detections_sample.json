@@ -1,0 +1,63 @@
+{
+  "image_path": "/surveys/TunnelA/2024-03-15/IMG_00847.jpg",
+  "timestamp": "2024-03-15T11:23:45Z",
+  "camera_pose": {
+    "position": [851.3, -12.4, 2.1],
+    "orientation": [0.12, 0.05, -0.87, 0.47]
+  },
+  "image_metadata": {
+    "width": 4096,
+    "height": 2160
+  },
+  "depth_map_path": "/surveys/TunnelA/2024-03-15/DEPTH_00847.tiff",
+  "masks": [
+    {
+      "id": "mask_001",
+      "class_label": "leakage_joint",
+      "confidence": 0.92,
+      "pixel_bbox": [1240, 890, 340, 230],
+      "pixel_centroid": [1410, 1005],
+      "measurements": {
+        "area_cm2": 63.4,
+        "trail_length_m": 0.58
+      },
+      "color_stats": {
+        "red_mean": 100,
+        "saturation": 45,
+        "brightness_delta": 48
+      }
+    },
+    {
+      "id": "mask_002",
+      "class_label": "spall",
+      "confidence": 0.88,
+      "pixel_bbox": [2200, 1100, 180, 120],
+      "pixel_centroid": [2290, 1160],
+      "measurements": {
+        "depth_mm": 58,
+        "area_cm2": 112
+      },
+      "color_stats": {
+        "red_mean": 140,
+        "saturation": 18,
+        "brightness_delta": 8
+      }
+    },
+    {
+      "id": "mask_003",
+      "class_label": "transverse_crack",
+      "confidence": 0.81,
+      "pixel_bbox": [850, 1400, 420, 40],
+      "pixel_centroid": [1060, 1420],
+      "measurements": {
+        "width_mm": 0.6,
+        "length_m": 1.8
+      },
+      "color_stats": {
+        "red_mean": 150,
+        "saturation": 12,
+        "brightness_delta": 6
+      }
+    }
+  ]
+}
