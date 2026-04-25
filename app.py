@@ -61,11 +61,17 @@ with st.sidebar:
     # Load ontology
     if not st.session_state.ontology_loaded:
         with st.spinner("Loading ontology..."):
-            g = load_ontology()
-            defects = load_defects(g)
-            st.session_state.graph = g
-            st.session_state.defects = defects
-            st.session_state.ontology_loaded = True
+            try:
+                g = load_ontology()
+                defects = load_defects(g)
+                st.session_state.graph = g
+                st.session_state.defects = defects
+                st.session_state.ontology_loaded = True
+            except Exception as e:
+                st.error(f"Failed to load ontology: {type(e).__name__}: {str(e)}")
+                # Set empty defects to allow app to continue
+                st.session_state.defects = []
+                st.session_state.ontology_loaded = True
 
     st.markdown("**Ontology status**")
     st.success(f"✓ Loaded — {len(st.session_state.graph)} triples")
@@ -88,6 +94,11 @@ st.caption(
 )
 
 # Key metrics
+if "defects" not in st.session_state:
+    st.error("ERROR: 'defects' not found in session state. The ontology loader may have failed.")
+    st.write("Debug - session state keys:", list(st.session_state.keys()) if hasattr(st, 'session_state') else "No session state")
+    st.stop()
+
 defects = st.session_state.defects
 active_defects = [d for d in defects if d.get("status") == "Active"]
 high_priority = [d for d in active_defects if d.get("priority") == "HIGH"]

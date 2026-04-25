@@ -182,7 +182,7 @@ cobie_row: {mask['id']}""", language=None)
         sheet_df = df[df["sheet"] == sheet].drop(columns=["sheet"])
         sheet_df = sheet_df.dropna(axis=1, how="all")
         st.markdown(f"**{sheet}** — {len(sheet_df)} row(s)")
-        st.dataframe(sheet_df, use_container_width=True, hide_index=True)
+        st.dataframe(sheet_df, width='stretch', hide_index=True)
 
     # Downloads
     col1, col2 = st.columns(2)

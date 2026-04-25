@@ -113,7 +113,7 @@ if filtered:
     # Streamlit native dataframe with selection
     event = st.dataframe(
         df,
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         on_select="rerun",
         selection_mode="single-row",

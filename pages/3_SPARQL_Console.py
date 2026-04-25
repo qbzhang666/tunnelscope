@@ -100,7 +100,7 @@ if run:
 
             df = pd.DataFrame(rows)
             st.success(f"Query returned **{len(df)} rows**.")
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.dataframe(df, width='stretch', hide_index=True)
 
             # Export options
             col1, col2 = st.columns(2)
