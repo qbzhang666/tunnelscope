@@ -45,7 +45,6 @@ with col3:
 with col4:
     st.metric("Individuals", len(individuals))
 
-# Smoke-test warning if anything came back zero
 if any(len(x) == 0 for x in [classes, obj_props, data_props]):
     st.warning(
         "One or more of the metric counts is zero. The ontology may not "
@@ -57,9 +56,6 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "Class hierarchy", "Object properties", "Data properties", "Individuals",
 ])
 
-# -----------------------------------------------------------------------------
-# Class hierarchy
-# -----------------------------------------------------------------------------
 with tab1:
     st.markdown("### Class hierarchy")
 
@@ -92,9 +88,6 @@ with tab1:
     else:
         st.info("No class hierarchy found. Is the ontology file loaded?")
 
-# -----------------------------------------------------------------------------
-# Object properties
-# -----------------------------------------------------------------------------
 with tab2:
     st.markdown("### Object properties")
     st.caption("Relations between individuals (e.g., hasCause, atComponent).")
@@ -115,9 +108,6 @@ with tab2:
             if comment:
                 st.markdown(f"**Description:** {str(comment[0])}")
 
-# -----------------------------------------------------------------------------
-# Data properties
-# -----------------------------------------------------------------------------
 with tab3:
     st.markdown("### Data properties")
     st.caption("Attributes of individuals (e.g., crackWidth, chainageM).")
@@ -138,9 +128,6 @@ with tab3:
             if comment:
                 st.markdown(f"**Description:** {str(comment[0])}")
 
-# -----------------------------------------------------------------------------
-# Individuals
-# -----------------------------------------------------------------------------
 with tab4:
     st.markdown("### Named individuals (ABox)")
     st.caption("Specific defect instances, components, and interventions.")

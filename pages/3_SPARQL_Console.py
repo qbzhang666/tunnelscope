@@ -2,18 +2,18 @@
 SPARQL Console — page 3
 ========================
 
-Direct query interface to the populated ontology. Users can select
-pre-built queries from a dropdown, or write their own. Results are
-displayed as an interactive table.
+Direct query interface to the populated ontology graph. Runs in-process
+via rdflib — in production this connects to Apache Jena Fuseki.
 
 REVISED:
-- width='stretch' replaced with use_container_width=True.
-- Zero-result diagnostic: when a query returns empty, the page
-  automatically shows what *does* exist for the queried properties,
-  so users can spot datatype mismatches and typos themselves.
-- Example queries no longer hard-code a specific Ring ID — they use
-  generic patterns that always return something against any populated
-  ontology.
+- Namespace updated to http://w3id.org/tunnel-dt/ontology/v1.2#
+- Honest banner explaining what's in the graph vs what's in the JSON
+  fallback (the source of the "no results" issue).
+- Diagnostic queries that focus on the schema (TBox), which is always
+  populated, in addition to instance queries (ABox) which may not be
+  if defects are loaded from data/*.json.
+- use_container_width=True replaces width='stretch' (Streamlit < 1.49
+  compatibility on Cloud).
 """
 
 import streamlit as st
@@ -32,15 +32,93 @@ if "graph" not in st.session_state:
 
 st.title("SPARQL console")
 st.caption(
-    "Direct query interface to the populated ontology. Runs in-process "
-    "via rdflib — in production this connects to Apache Jena Fuseki."
+    "Direct query interface to the populated ontology graph. Runs "
+    "in-process via rdflib — in production this connects to Apache "
+    "Jena Fuseki."
 )
 
 # -----------------------------------------------------------------------------
-# Diagnostic queries — always work against any populated ontology
+# Honest banner about graph contents
+# -----------------------------------------------------------------------------
+graph = st.session_state.graph
+graph_size = len(graph)
+
+# Check whether the graph has any defect *instances*, not just classes.
+instance_check = """
+PREFIX tun: <http://w3id.org/tunnel-dt/ontology/v1.2#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+SELECT (COUNT(?d) AS ?count) WHERE {
+    ?d rdf:type tun:DefectCondition .
+}
+"""
+try:
+    rows = list(graph.query(instance_check))
+    instance_count = int(rows[0][0]) if rows else 0
+except Exception:
+    instance_count = 0
+
+defect_dict_count = len(st.session_state.get("defects", []))
+
+if instance_count == 0 and defect_dict_count > 0:
+    st.info(
+        f"**Graph status:** {graph_size:,} triples loaded — schema (TBox) "
+        f"only, no defect instances (ABox) materialised. The {defect_dict_count} "
+        f"defects shown on the **Defect Register** are loaded from "
+        f"`data/defects_tunnel_a.json` as a fallback. SPARQL queries can "
+        f"explore the schema (classes, properties, hierarchy) but will "
+        f"not return defect instances. To enable instance queries, see "
+        f"`materialise_defects_into_graph()` in the deployment notes."
+    )
+else:
+    st.caption(
+        f"Graph: **{graph_size:,} triples** · "
+        f"**{instance_count} defect instance(s)** materialised."
+    )
+
+# -----------------------------------------------------------------------------
+# Diagnostic queries — focus on the schema (always present)
 # -----------------------------------------------------------------------------
 DIAGNOSTIC_QUERIES = {
-    "List all defects (no filter)": """PREFIX tun: <http://tunnel-dt.transurban.com/ontology/v1.2#>
+    "Schema — list all OWL classes": """PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT ?class ?comment WHERE {
+    ?class rdf:type owl:Class .
+    OPTIONAL { ?class rdfs:comment ?comment . }
+    FILTER(STRSTARTS(STR(?class), "http://w3id.org/tunnel-dt/"))
+}
+ORDER BY ?class
+""",
+    "Schema — list all object properties (with domain/range)": """PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT ?property ?domain ?range WHERE {
+    ?property rdf:type owl:ObjectProperty .
+    OPTIONAL { ?property rdfs:domain ?domain . }
+    OPTIONAL { ?property rdfs:range ?range . }
+    FILTER(STRSTARTS(STR(?property), "http://w3id.org/tunnel-dt/"))
+}
+ORDER BY ?property
+""",
+    "Schema — count triples by predicate": """SELECT ?predicate (COUNT(*) AS ?count) WHERE {
+    ?s ?predicate ?o .
+}
+GROUP BY ?predicate
+ORDER BY DESC(?count)
+LIMIT 30
+""",
+    "Schema — class hierarchy (subclass relationships)": """PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+SELECT ?child ?parent WHERE {
+    ?child rdfs:subClassOf ?parent .
+    FILTER(STRSTARTS(STR(?child), "http://w3id.org/tunnel-dt/"))
+    FILTER(STRSTARTS(STR(?parent), "http://w3id.org/tunnel-dt/"))
+}
+ORDER BY ?parent ?child
+""",
+    "Instances — list all defect instances (if materialised)": """PREFIX tun: <http://w3id.org/tunnel-dt/ontology/v1.2#>
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 
 SELECT ?defect ?type WHERE {
@@ -49,26 +127,20 @@ SELECT ?defect ?type WHERE {
 }
 LIMIT 50
 """,
-    "List all distinct ring IDs in the data": """PREFIX tun: <http://tunnel-dt.transurban.com/ontology/v1.2#>
+    "Instances — distinct ring IDs in the graph": """PREFIX tun: <http://w3id.org/tunnel-dt/ontology/v1.2#>
 
 SELECT DISTINCT ?ring WHERE {
     ?defect tun:atRingID ?ring .
 }
 ORDER BY ?ring
 """,
-    "List all properties used on defects": """PREFIX tun: <http://tunnel-dt.transurban.com/ontology/v1.2#>
-PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-
-SELECT DISTINCT ?property WHERE {
-    ?defect rdf:type tun:DefectCondition ;
-            ?property ?value .
-}
-ORDER BY ?property
-""",
-    "Count instances by class": """PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+    "Instances — count by class (ABox)": """PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
 
 SELECT ?class (COUNT(?instance) AS ?count) WHERE {
     ?instance rdf:type ?class .
+    FILTER(?class != owl:NamedIndividual)
+    FILTER(STRSTARTS(STR(?class), "http://w3id.org/tunnel-dt/"))
 }
 GROUP BY ?class
 ORDER BY DESC(?count)
@@ -84,23 +156,23 @@ example_name = st.selectbox(
     "Load example query",
     options=["(Write my own)"] + list(all_examples.keys()),
     index=1,
-    help="Diagnostic queries (top of list) always work against any "
-         "populated ontology. Use them first to verify what data exists.",
+    help="Schema queries (top of list) work against any loaded ontology. "
+         "Instance queries require defects to be materialised in the graph.",
 )
 
 if example_name != "(Write my own)":
     default_query = all_examples[example_name]
 else:
-    default_query = """PREFIX tun: <http://tunnel-dt.transurban.com/ontology/v1.2#>
+    default_query = """PREFIX tun: <http://w3id.org/tunnel-dt/ontology/v1.2#>
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
 
-SELECT ?defect ?type ?ring
-WHERE {
-    ?defect rdf:type tun:DefectCondition ;
-            tun:hasType ?type ;
-            tun:atRingID ?ring .
+SELECT ?class WHERE {
+    ?class rdf:type owl:Class .
+    FILTER(STRSTARTS(STR(?class), "http://w3id.org/tunnel-dt/"))
 }
-LIMIT 10
+LIMIT 20
 """
 
 # -----------------------------------------------------------------------------
@@ -122,7 +194,7 @@ with col2:
 
 
 # -----------------------------------------------------------------------------
-# Helper: shorten URIs for display
+# Helpers
 # -----------------------------------------------------------------------------
 def _shorten(val):
     if val is None:
@@ -130,12 +202,14 @@ def _shorten(val):
     s = str(val)
     if "#" in s:
         return ":" + s.split("#")[-1]
+    if "/" in s and s.startswith("http"):
+        return s.rsplit("/", 1)[-1]
     return s
 
 
-def _run_to_dataframe(graph, sparql: str) -> pd.DataFrame:
+def _run_to_dataframe(g, sparql: str) -> pd.DataFrame:
     """Execute a SPARQL query and return a DataFrame with shortened URIs."""
-    results = list(graph.query(sparql))
+    results = list(g.query(sparql))
     if not results:
         return pd.DataFrame()
     headers = [str(v) for v in results[0].labels]
@@ -153,64 +227,57 @@ def _run_to_dataframe(graph, sparql: str) -> pd.DataFrame:
 # Execute
 # -----------------------------------------------------------------------------
 if run:
-    graph = st.session_state.graph
     try:
         df = _run_to_dataframe(graph, query)
 
         if df.empty:
             st.warning(
-                "Query returned no results. This usually means one of: "
-                "(1) a property name is misspelled, (2) a literal datatype "
-                "mismatch (e.g. `1247` vs `\"1247\"`), or (3) no record "
-                "matches the filter values. The diagnostic block below "
-                "shows what *does* exist."
+                "Query returned no results. If you queried for defect "
+                "instances and the graph banner above shows zero "
+                "instances materialised, that's why — the schema is "
+                "loaded but the instances live in JSON. Try a schema "
+                "query (top of the dropdown) instead."
             )
 
-            with st.expander("🔍 Diagnostic — what's actually in the graph",
-                             expanded=True):
-                st.markdown("**Distinct values for `tun:atRingID`:**")
-                try:
-                    ring_df = _run_to_dataframe(graph, """
-                        PREFIX tun: <http://tunnel-dt.transurban.com/ontology/v1.2#>
-                        SELECT DISTINCT ?ring WHERE { ?d tun:atRingID ?ring }
-                        ORDER BY ?ring
-                    """)
-                    if ring_df.empty:
-                        st.markdown(":grey[No `tun:atRingID` values found.]")
-                    else:
-                        st.dataframe(
-                            ring_df, use_container_width=True, hide_index=True
-                        )
-                except Exception as e:
-                    st.markdown(f":grey[Diagnostic query failed: {e}]")
+            with st.expander("🔍 What *is* in the graph?", expanded=True):
+                st.markdown(f"**Total triples:** {graph_size:,}")
 
-                st.markdown("**Properties used on defects:**")
+                st.markdown("**Top 10 most-used predicates:**")
                 try:
-                    prop_df = _run_to_dataframe(graph, """
-                        PREFIX tun: <http://tunnel-dt.transurban.com/ontology/v1.2#>
-                        PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-                        SELECT DISTINCT ?property WHERE {
-                            ?d rdf:type tun:DefectCondition ;
-                               ?property ?v .
+                    pred_df = _run_to_dataframe(graph, """
+                        SELECT ?p (COUNT(*) AS ?count) WHERE {
+                            ?s ?p ?o .
                         }
-                        ORDER BY ?property
+                        GROUP BY ?p
+                        ORDER BY DESC(?count)
+                        LIMIT 10
                     """)
-                    if prop_df.empty:
-                        st.markdown(":grey[No defect-condition properties found.]")
+                    if pred_df.empty:
+                        st.markdown(":grey[Graph is empty.]")
                     else:
                         st.dataframe(
-                            prop_df, use_container_width=True, hide_index=True
+                            pred_df, use_container_width=True, hide_index=True
                         )
                 except Exception as e:
-                    st.markdown(f":grey[Diagnostic query failed: {e}]")
+                    st.markdown(f":grey[Diagnostic failed: {e}]")
 
-                st.markdown(
-                    "**Tip:** if your query filters by ring "
-                    "(e.g. `tun:atRingID 1247`) but the diagnostic shows "
-                    "rings as `\"1247\"` (quoted), the literal is stored "
-                    "as a string. Try `tun:atRingID \"1247\"` instead — "
-                    "or remove the `xsd:` datatype constraint."
-                )
+                st.markdown("**Classes defined in the graph:**")
+                try:
+                    cls_df = _run_to_dataframe(graph, """
+                        PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+                        PREFIX owl: <http://www.w3.org/2002/07/owl#>
+                        SELECT ?class WHERE { ?class rdf:type owl:Class . }
+                        ORDER BY ?class
+                        LIMIT 30
+                    """)
+                    if cls_df.empty:
+                        st.markdown(":grey[No OWL classes in the graph.]")
+                    else:
+                        st.dataframe(
+                            cls_df, use_container_width=True, hide_index=True
+                        )
+                except Exception as e:
+                    st.markdown(f":grey[Diagnostic failed: {e}]")
         else:
             st.success(f"Query returned **{len(df)} rows**.")
             st.dataframe(df, use_container_width=True, hide_index=True)
@@ -241,13 +308,13 @@ if run:
 with st.expander("SPARQL quick reference"):
     st.markdown("""
     **Common prefixes used in this ontology:**
-    - `tun:` — `http://tunnel-dt.transurban.com/ontology/v1.2#`
-    - `cobie:` — `http://tunnel-dt.transurban.com/cobie#`
+    - `tun:` — `http://w3id.org/tunnel-dt/ontology/v1.2#`
+    - `cobie:` — `http://w3id.org/tunnel-dt/cobie#`
     - `rdf:` — `http://www.w3.org/1999/02/22-rdf-syntax-ns#`
     - `rdfs:` — `http://www.w3.org/2000/01/rdf-schema#`
     - `owl:` — `http://www.w3.org/2002/07/owl#`
 
-    **Useful classes:**
+    **Useful classes (TBox):**
     - `tun:DefectCondition` — any detected defect
     - `tun:Cracks`, `tun:Spalls`, `tun:LeakingJoints` — specific types
     - `tun:FailureMechanism` — deterioration process
@@ -262,7 +329,10 @@ with st.expander("SPARQL quick reference"):
     - `tun:detectedBy`, `tun:sourceReference`
     - `tun:completenessScore`, `tun:estimatedCost`
 
-    **Datatype tip:** if a query returns no results, check whether your
-    literal matches the stored datatype. Run *List all distinct ring IDs*
-    from the diagnostic queries above to see how values are actually stored.
+    **Schema vs instances:**
+    The graph always contains the schema (TBox) — classes, properties,
+    hierarchy. Defect instances (ABox) are only in the graph if the
+    ontology TTL contains them, OR if the loader materialises them
+    from JSON. If your graph has zero defect instances, schema queries
+    still work; instance queries return empty.
     """)

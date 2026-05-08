@@ -4,6 +4,15 @@ Pre-built SPARQL queries for common dashboard operations.
 Each query is a function returning the query string, so namespaces can
 be substituted if your ontology uses different URIs. The raw .rq files
 in queries/ mirror these for reference and reuse in other tools.
+
+REVISIONS (Rev 4)
+-----------------
+- Namespace migrated to http://w3id.org/tunnel-dt/...
+- Queries that match defects by class now use the property path
+  rdf:type/rdfs:subClassOf* to traverse subclass relationships, since
+  defects are typed as subclasses (Cracks, Spalls, LeakingJoints) of
+  DefectCondition. Without this path, rdflib's SPARQL engine returns
+  zero rows even when instances are present.
 """
 
 from pathlib import Path
@@ -12,8 +21,9 @@ QUERIES_DIR = Path(__file__).parent.parent / "queries"
 
 
 PREFIX_BLOCK = """
-PREFIX tun:  <http://tunnel-dt.transurban.com/ontology/v1.2#>
-PREFIX cobie: <http://tunnel-dt.transurban.com/cobie#>
+PREFIX tun:  <http://w3id.org/tunnel-dt/ontology/v1.2#>
+PREFIX cobie: <http://w3id.org/tunnel-dt/cobie#>
+PREFIX rads: <http://w3id.org/tunnel-dt/rads#>
 PREFIX rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 PREFIX owl:  <http://www.w3.org/2002/07/owl#>
@@ -21,17 +31,31 @@ PREFIX owl:  <http://www.w3.org/2002/07/owl#>
 
 
 def query_all_defects_by_ring(ring_id: int) -> str:
+    """List defects at a specific ring, traversing the subclass hierarchy."""
     return PREFIX_BLOCK + f"""
-    SELECT ?defect ?type ?mechanism ?severity ?priority
+    SELECT ?defect ?type ?severity ?priority
     WHERE {{
-        ?defect rdf:type tun:DefectCondition ;
-                tun:atRingID {ring_id} ;
-                tun:hasType ?type ;
-                tun:hasMechanism ?mechanism .
+        ?defect rdf:type/rdfs:subClassOf* tun:DefectCondition ;
+                tun:atRingID {ring_id} .
+        OPTIONAL {{ ?defect tun:hasType ?type . }}
         OPTIONAL {{ ?defect tun:hasSeverity ?severity . }}
         OPTIONAL {{ ?defect tun:hasPriority ?priority . }}
     }}
     ORDER BY DESC(?priority)
+    """
+
+
+def query_all_defects() -> str:
+    """List every defect, regardless of ring. Useful as a sanity check."""
+    return PREFIX_BLOCK + """
+    SELECT ?defect ?type ?ring ?priority
+    WHERE {
+        ?defect rdf:type/rdfs:subClassOf* tun:DefectCondition .
+        OPTIONAL { ?defect tun:hasType ?type . }
+        OPTIONAL { ?defect tun:atRingID ?ring . }
+        OPTIONAL { ?defect tun:hasPriority ?priority . }
+    }
+    ORDER BY ?ring
     """
 
 
@@ -53,12 +77,13 @@ def query_high_priority_defects() -> str:
     return PREFIX_BLOCK + """
     SELECT ?defect ?ring ?chainage ?type ?priority ?cost
     WHERE {
-        ?defect rdf:type tun:DefectCondition ;
-                tun:hasPriority "HIGH" ;
-                tun:atRingID ?ring ;
-                tun:atChainage ?chainage ;
-                tun:hasType ?type .
+        ?defect rdf:type/rdfs:subClassOf* tun:DefectCondition ;
+                tun:hasPriority "HIGH" .
+        OPTIONAL { ?defect tun:atRingID ?ring . }
+        OPTIONAL { ?defect tun:atChainage ?chainage . }
+        OPTIONAL { ?defect tun:hasType ?type . }
         OPTIONAL { ?defect tun:estimatedCost ?cost . }
+        BIND("HIGH" AS ?priority)
     }
     ORDER BY ?chainage
     """
@@ -69,8 +94,8 @@ def query_fmea_chain_for_defect(defect_id: str) -> str:
     SELECT ?component ?mechanism ?indicator ?indValue
            ?cause ?intervention ?sourceRef
     WHERE {{
-        tun:{defect_id} tun:atComponent ?component ;
-                        tun:hasMechanism ?mechanism .
+        OPTIONAL {{ tun:{defect_id} tun:atComponent ?component . }}
+        OPTIONAL {{ tun:{defect_id} tun:hasMechanism ?mechanism . }}
         OPTIONAL {{
             tun:{defect_id} tun:hasIndicator ?indicator .
             ?indicator tun:indicatorValue ?indValue .
@@ -88,7 +113,7 @@ def query_modality_coverage_stats() -> str:
     return PREFIX_BLOCK + """
     SELECT ?modality (COUNT(?defect) AS ?defectCount)
     WHERE {
-        ?defect rdf:type tun:DefectCondition ;
+        ?defect rdf:type/rdfs:subClassOf* tun:DefectCondition ;
                 tun:detectedBy ?modality .
     }
     GROUP BY ?modality
@@ -99,12 +124,11 @@ def query_modality_coverage_stats() -> str:
 def query_defects_missing_cause_level() -> str:
     """Find defects with incomplete FMEA — missing cause-level evidence."""
     return PREFIX_BLOCK + """
-    SELECT ?defect ?ring ?chainage ?type
+    SELECT ?defect ?ring ?type
     WHERE {
-        ?defect rdf:type tun:DefectCondition ;
-                tun:atRingID ?ring ;
-                tun:atChainage ?chainage ;
-                tun:hasType ?type .
+        ?defect rdf:type/rdfs:subClassOf* tun:DefectCondition .
+        OPTIONAL { ?defect tun:atRingID ?ring . }
+        OPTIONAL { ?defect tun:hasType ?type . }
         FILTER NOT EXISTS {
             ?defect tun:hasPotentialCause ?c .
         }
@@ -137,6 +161,7 @@ def load_query_from_file(filename: str) -> str:
 # Example queries for the SPARQL console dropdown
 # -----------------------------------------------------------------------------
 EXAMPLE_QUERIES = {
+    "All defects (subclass-aware)": query_all_defects(),
     "All defects at Ring 1247": query_all_defects_by_ring(1247),
     "High priority defects": query_high_priority_defects(),
     "FMEA chain for D-1247-L": query_fmea_chain_for_defect("D-1247-L"),

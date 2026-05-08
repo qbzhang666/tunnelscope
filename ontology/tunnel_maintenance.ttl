@@ -3,9 +3,9 @@
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix dcterms: <http://purl.org/dc/terms/> .
-@prefix tun: <http://tunnel-dt.transurban.com/ontology/v1.2#> .
+@prefix tun: <http://w3id.org/tunnel-dt/ontology/v1.2#> .
 
-<http://tunnel-dt.transurban.com/ontology/v1.2> a owl:Ontology ;
+<http://w3id.org/tunnel-dt/ontology/v1.2> a owl:Ontology ;
     dcterms:title "Road Tunnel Maintenance Ontology" ;
     dcterms:description "Serviceability-oriented multimodal maintenance ontology for Australian road tunnels." ;
     owl:versionInfo "1.2.0" .

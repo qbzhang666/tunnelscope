@@ -23,7 +23,6 @@ from utils.styling import apply_custom_css
 st.set_page_config(page_title="Defect Register", layout="wide")
 apply_custom_css()
 
-# Ensure ontology is loaded
 if "graph" not in st.session_state:
     st.session_state.graph = load_ontology()
     st.session_state.defects = load_defects(st.session_state.graph)
@@ -71,7 +70,7 @@ with st.expander("Filters", expanded=True):
             index=0,
         )
 
-# Apply filters
+
 def _passes_source_filter(defect):
     if not source_filter:
         return True
@@ -82,6 +81,7 @@ def _passes_source_filter(defect):
         return True
     return False
 
+
 filtered = [
     d for d in defects
     if (not type_filter or d["defect_type"] in type_filter)
@@ -89,7 +89,6 @@ filtered = [
     and _passes_source_filter(d)
 ]
 
-# Apply sort
 if sort_by == "Priority":
     priority_order = {"HIGH": 0, "MEDIUM": 1, "LOW": 2}
     filtered.sort(
@@ -115,8 +114,6 @@ st.write(f"**{len(filtered)} defects** match current filters.")
 if filtered:
     table_data = []
     for d in filtered:
-        # Count modalities with evidence (out of 4) instead of showing a
-        # completeness score that suggests deficiency.
         evidence = d.get("modality_evidence", {})
         modality_count = sum(
             1 for m in ["RGB", "RGBD", "Thermal", "GPR"]
@@ -161,7 +158,6 @@ if filtered:
         },
     )
 
-    # Handle selection — navigate to detail page
     if event.selection.rows:
         selected_idx = event.selection.rows[0]
         selected_defect = filtered[selected_idx]

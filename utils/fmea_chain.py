@@ -29,26 +29,14 @@ from typing import Dict, List, Tuple
 # -----------------------------------------------------------------------------
 # Modality framework (paper Section 3.6)
 # -----------------------------------------------------------------------------
-# Which FMEA chain levels each modality can populate.
-# Levels follow the seven-step chain collapsed into the four observable
-# evidence levels:
-#     defect       — what is wrong (qualitative)
-#     indicator    — how bad (quantitative dimensions)
-#     cause        — why it is happening (subsurface or thermal)
-#     subsurface   — what is inside the lining
 MODALITY_LEVELS: Dict[str, List[str]] = {
     "RGB":     ["defect_qualitative"],
     "RGBD":    ["defect_qualitative", "indicator_quantitative"],
     "Thermal": ["cause_qualitative", "indicator_quantitative"],
     "GPR":     ["cause_subsurface", "indicator_quantitative"],
-    # Text/inspection report contributes at the defect level via the
-    # inspector's classification, sometimes at indicator level if
-    # measurements are recorded.
     "InspectionReport": ["defect_qualitative", "indicator_quantitative"],
 }
 
-# Defect types each modality genuinely cannot detect — used to suppress
-# nonsensical "deploy modality X" recommendations.
 MODALITY_LIMITATIONS: Dict[str, List[str]] = {
     "RGB":     ["void", "rebar", "subsurface"],
     "RGBD":    ["void", "rebar", "subsurface"],
@@ -57,7 +45,6 @@ MODALITY_LIMITATIONS: Dict[str, List[str]] = {
     "InspectionReport": [],
 }
 
-# All four evidence levels we want covered for a "complete" FMEA chain.
 ALL_LEVELS = [
     "defect_qualitative",
     "indicator_quantitative",
@@ -91,12 +78,6 @@ def compute_completeness(
         Fraction of the four evidence levels that are covered.
     covered : list of level names that ARE covered.
     missing : list of level names that are NOT covered.
-
-    Note
-    ----
-    A score of 0 does NOT mean "do nothing." It means the recommendation
-    will be tagged LOW confidence. The page-level UI handles that
-    framing — this function is purely descriptive.
     """
     covered_set = set()
     for modality in available_modalities:
@@ -116,9 +97,7 @@ def recommend_missing_modality(
 ) -> List[Dict[str, str]]:
     """
     Recommend additional modalities that would *enhance* the diagnosis.
-
-    Framed as enhancement, not a prerequisite. Used in the Defect Detail
-    page under "Additional surveys could strengthen this assessment".
+    Framed as enhancement, not a prerequisite.
     """
     score, _, missing = compute_completeness(defect_type, available_modalities)
 
@@ -133,7 +112,6 @@ def recommend_missing_modality(
             if modality in available_modalities:
                 continue
             if modality == "InspectionReport":
-                # Don't recommend a written report as a "survey to deploy".
                 continue
             if any(_normalise_level(l) == _normalise_level(missing_level)
                    for l in levels):
@@ -150,7 +128,6 @@ def recommend_missing_modality(
                     ),
                 })
 
-    # Deduplicate by modality
     seen = set()
     unique = []
     for rec in recommendations:
@@ -167,16 +144,7 @@ def recommend_missing_modality(
 def confidence_tier(completeness_score: float) -> Dict[str, str]:
     """
     Map a completeness score to a confidence tier label.
-
-    REVISED LOGIC: This no longer blocks intervention output. Every
-    tier produces a valid recommendation; the tier label tells the
-    engineer how much to trust it and what would strengthen the case.
-
-    Returns a dict with:
-        tier     — HIGH / MEDIUM / LOW
-        label    — short human label for the badge
-        action   — guidance on how to treat the recommendation
-        upgrade  — what would lift the tier
+    Never blocks intervention output.
     """
     if completeness_score >= 0.75:
         return {
@@ -187,9 +155,7 @@ def confidence_tier(completeness_score: float) -> Dict[str, str]:
                 "across the FMEA chain. Engineer review is still required "
                 "before execution, but the diagnostic basis is strong."
             ),
-            "upgrade": (
-                "No additional surveys required for this decision."
-            ),
+            "upgrade": "No additional surveys required for this decision.",
         }
     elif completeness_score >= 0.5:
         return {
@@ -222,7 +188,6 @@ def confidence_tier(completeness_score: float) -> Dict[str, str]:
         }
 
 
-# Backward-compatible alias — old code calls decision_pathway()
 def decision_pathway(completeness_score: float) -> Dict[str, str]:
     """Deprecated alias. Returns confidence_tier with legacy keys."""
     tier = confidence_tier(completeness_score)
@@ -244,13 +209,9 @@ def modality_state(
 ) -> str:
     """
     Return one of three states for the modality matrix UI:
-
         "present"        — evidence collected and used in the chain
         "could_enhance"  — not collected; would add useful evidence
         "not_applicable" — this modality cannot detect this defect type
-
-    Replaces the old binary present/missing logic, which incorrectly
-    framed any absence as a deficiency.
     """
     if has_evidence:
         return "present"

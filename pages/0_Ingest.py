@@ -11,14 +11,15 @@ For each input route the user can pick:
     - Heuristic stub: filename + simple text rules pre-fill what they can,
       labelled as a demo placeholder for an upstream ML pipeline.
 
-This page exists to make the app match operator reality — most defects
-are first reported with one photo or a short text note, not with a
-co-located four-modality survey. Multimodal fusion is then framed as
-an enhancement, not a prerequisite.
+Both routes converge on the same defect dict, so downstream pages
+(Defect Register, Defect Detail) need no changes.
+
+Defect IDs follow the existing ontology convention with an 'i' suffix
+to mark them as ingested:
+    D-{ring}-{type_letter}-i{seq}    e.g. D-1247-C-i01
 """
 
 import streamlit as st
-from datetime import date
 
 from utils.ontology_loader import load_ontology, load_defects
 from utils.styling import apply_custom_css
@@ -26,6 +27,7 @@ from utils.ingest import (
     DEFECT_TYPE_OPTIONS, PRIORITY_OPTIONS, POSITION_OPTIONS,
     extract_text_from_upload, heuristic_defect_type_from_filename,
     heuristic_fields_from_text, build_defect_dict,
+    build_ingested_defect_id,
 )
 
 st.set_page_config(page_title="Ingest", layout="wide")
@@ -99,7 +101,6 @@ if input_route.startswith("Image"):
                     "Please pick the type below."
                 )
 
-        # ---- Form for the rest of the fields ----
         with st.form("image_ingest_form"):
             col1, col2 = st.columns(2)
             with col1:
@@ -152,14 +153,15 @@ if input_route.startswith("Image"):
             if area_cm2 > 0:
                 measurements["area_cm2"] = area_cm2
 
-            # An RGB photo populates the qualitative defect level. If the
-            # operator added quantitative measurements, we also credit
-            # RGBD-equivalent evidence.
             modalities = ["RGB"]
             if measurements:
                 modalities.append("RGBD")
 
-            new_id = f"D-ING-{len(st.session_state.ingested_defects)+1:03d}"
+            new_id = build_ingested_defect_id(
+                ring_id=ring_id,
+                defect_type=defect_type,
+                sequence_number=len(st.session_state.ingested_defects) + 1,
+            )
             defect = build_defect_dict(
                 defect_id=new_id,
                 defect_type=defect_type,
@@ -237,7 +239,6 @@ else:
                         "or measurements. Please fill in manually."
                     )
 
-        # ---- Form ----
         with st.form("text_ingest_form"):
             col1, col2 = st.columns(2)
             with col1:
@@ -293,14 +294,15 @@ else:
             if area_cm2 > 0:
                 measurements["area_cm2"] = area_cm2
 
-            # A text report contributes at the qualitative defect level
-            # via the inspector's classification. If quantitative
-            # measurements are present, we credit the indicator level too.
             modalities = ["InspectionReport"]
             if measurements:
                 modalities.append("RGBD")
 
-            new_id = f"D-ING-{len(st.session_state.ingested_defects)+1:03d}"
+            new_id = build_ingested_defect_id(
+                ring_id=ring_id,
+                defect_type=defect_type,
+                sequence_number=len(st.session_state.ingested_defects) + 1,
+            )
             defect = build_defect_dict(
                 defect_id=new_id,
                 defect_type=defect_type,

@@ -12,11 +12,10 @@ Shows the full FMEA reasoning chain for a single defect, including:
     - Work order generation and COBie export
 
 REVISED:
-- Single-modality input is now a first-class case. The page renders a
-  full intervention with a LOW confidence label, not a refusal.
-- Modality matrix has three states, distinguishing "evidence not yet
-  collected" from "modality cannot detect this defect type".
-- The confidence tier is a label on the recommendation, not a gate.
+- Selectbox moved to top of page (above title) to fix label cropping.
+- Single-modality input is a first-class case — full intervention shown
+  with a LOW confidence label rather than a refusal.
+- Modality matrix has three states (present / could enhance / not applicable).
 """
 
 import streamlit as st
@@ -61,8 +60,7 @@ def _summarise_measurements(defect: dict) -> str:
 def _default_interventions_for_type(defect_type: str) -> list:
     """
     Fall-back intervention plan keyed on defect type, used when the
-    ontology has no explicit prescribed_interventions for the record
-    (typical for ingested defects). Sources are AASHTO Ch16 by default.
+    ontology has no explicit prescribed_interventions for the record.
     """
     table = {
         "Cracks": [
@@ -155,25 +153,37 @@ def _default_interventions_for_type(defect_type: str) -> list:
          "reference": "Engineer judgement"},
     ]
 
+
 # -----------------------------------------------------------------------------
-# Defect selector
+# Page header — title FIRST, then selectbox below with breathing room
 # -----------------------------------------------------------------------------
+st.title("Defect detail")
+st.caption(
+    "Full FMEA reasoning chain and prescribed intervention for a single "
+    "defect. Pick a defect from the dropdown below."
+)
+
 defects = st.session_state.defects
 defect_ids = [d["defect_id"] for d in defects]
 
-default_id = st.session_state.get("selected_defect_id") or (
-    defect_ids[0] if defect_ids else None
-)
-
 if not defect_ids:
-    st.warning("No defects available. Use the **Ingest** page to register "
-               "one, or load sample data into the ontology.")
+    st.warning(
+        "No defects available. Use the **Ingest** page to register one, "
+        "or load sample data into the ontology."
+    )
     st.stop()
+
+default_id = st.session_state.get("selected_defect_id") or defect_ids[0]
+
+# Add visual breathing room before the selectbox so the label can't be
+# clipped by content above (the bug we hit on the first revision).
+st.write("")
 
 selected_id = st.selectbox(
     "Select defect",
     options=defect_ids,
     index=defect_ids.index(default_id) if default_id in defect_ids else 0,
+    key="defect_detail_selector",
 )
 
 defect = next((d for d in defects if d["defect_id"] == selected_id), {})
@@ -181,10 +191,12 @@ if not defect:
     st.error(f"Defect {selected_id} not found.")
     st.stop()
 
+st.divider()
+
 # -----------------------------------------------------------------------------
-# Header
+# Header for the selected defect
 # -----------------------------------------------------------------------------
-st.title(f"{defect['defect_id']} — {defect['description']}")
+st.subheader(f"{defect['defect_id']} — {defect['description']}")
 caption_parts = [
     f"Ring {defect['ring_id']}",
     f"Chainage K{defect.get('chainage_m', 0):.0f}m",
@@ -217,7 +229,6 @@ with col4:
     cost = defect.get("estimated_cost_aud", 0)
     st.metric("Est. cost", f"${cost:,}" if cost else "Pending")
 
-# Tier explainer banner — always shown, never a refusal
 if tier["tier"] == "HIGH":
     st.success(f"**{tier['label']}** — {tier['action']}")
 elif tier["tier"] == "MEDIUM":
@@ -263,7 +274,6 @@ for i, modality in enumerate(["RGB", "RGBD", "Thermal", "GPR"]):
             st.markdown(":grey[— Not applicable]")
             st.caption("This modality cannot detect this defect type.")
 
-# Inspection-report evidence (text route) — separate row when present
 if evidence.get("InspectionReport") or evidence.get("RGB", {}).get("status") == "Reported by inspector":
     st.markdown("---")
     rep = evidence.get("InspectionReport") or evidence.get("RGB", {})
@@ -312,7 +322,6 @@ st.subheader("FMEA reasoning chain")
 
 chain_data = defect.get("fmea_chain", [])
 if not chain_data:
-    # Build from individual fields as fallback
     chain_data = [
         {"step": "1. Component",
          "value": f"Concrete lining at Ring {defect['ring_id']}",
@@ -353,7 +362,6 @@ for step in chain_data:
 st.divider()
 st.subheader("Prescribed intervention")
 
-# Tier-aware framing on the intervention block itself
 if tier["tier"] == "LOW":
     st.caption(
         "ℹ️ Recommendation generated from limited evidence. Treat as an "
@@ -363,8 +371,6 @@ if tier["tier"] == "LOW":
 
 interventions = defect.get("prescribed_interventions", [])
 if not interventions:
-    # Fall back to a generic, defect-type-driven intervention so single-
-    # source records still get a starting recommendation.
     interventions = _default_interventions_for_type(defect["defect_type"])
 
 for i, iv in enumerate(interventions, 1):

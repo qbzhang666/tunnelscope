@@ -11,11 +11,6 @@ through the three sub-stages:
     Stage A — geolocate (pixel to 3D to chainage)
     Stage B — extract attributes (dimensions, moisture code, severity)
     Stage C — component linkage and COBie row population
-
-REVISED:
-- width='stretch' replaced with use_container_width=True.
-- Page reframed as the *advanced/multimodal* route. For a single image
-  or a written report, the **Ingest** page is the entry point.
 """
 
 import json
@@ -132,7 +127,6 @@ if cv_output:
         ):
             col1, col2, col3 = st.columns(3)
 
-            # Stage A — geolocate
             with col1:
                 st.markdown("**Stage A — Geolocate**")
                 geo = pixel_to_chainage(
@@ -147,7 +141,6 @@ ring_id: {geo['ring_id']}
 angle: {geo['circumferential_angle_deg']}°
 zone: {geo['position_zone']}""", language=None)
 
-            # Stage B — attributes
             with col2:
                 st.markdown("**Stage B — Extract attributes**")
                 defect_type = CV_CLASS_TO_DEFECT_TYPE.get(
@@ -171,7 +164,6 @@ moisture_code: {moisture}
 severity: {severity or 'N/A'}
 priority: {priority}""", language=None)
 
-            # Stage C — component linkage
             with col3:
                 st.markdown("**Stage C — Link component**")
                 component = f"Ring_{geo['ring_id']}"
@@ -182,15 +174,14 @@ cobie_row: {mask['id']}""", language=None)
 
     st.divider()
 
-    # -----------------------------------------------------------------------------
+    # ------------------------------------------------------------------
     # Final COBie output
-    # -----------------------------------------------------------------------------
+    # ------------------------------------------------------------------
     st.subheader("Output — COBie spreadsheet rows")
 
     rows = convert_cv_output_to_cobie_rows(cv_output, tunnel_id="TUN-A")
     df = pd.DataFrame(rows)
 
-    # Group by sheet
     sheets = df["sheet"].unique() if not df.empty else []
     for sheet in sheets:
         sheet_df = df[df["sheet"] == sheet].drop(columns=["sheet"])
@@ -198,7 +189,6 @@ cobie_row: {mask['id']}""", language=None)
         st.markdown(f"**{sheet}** — {len(sheet_df)} row(s)")
         st.dataframe(sheet_df, use_container_width=True, hide_index=True)
 
-    # Downloads
     col1, col2 = st.columns(2)
     with col1:
         csv = df.to_csv(index=False).encode("utf-8")

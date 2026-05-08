@@ -64,6 +64,21 @@ FILENAME_KEYWORDS: List[Tuple[str, str]] = [
 ]
 
 
+# Defect-type → single-letter code used in defect IDs to match the
+# existing ontology convention (e.g. D-1247-L for a leak at Ring 1247).
+DEFECT_TYPE_LETTER: Dict[str, str] = {
+    "Cracks": "C",
+    "Spalls": "S",
+    "LeakingJoints": "L",
+    "Efflorescence": "E",
+    "RebarCorrosion": "R",
+    "Delamination": "D",
+    "Honeycombing": "H",
+    "ConstructionJointDefect": "J",
+    "Unclassified": "U",
+}
+
+
 def heuristic_defect_type_from_filename(filename: str) -> str:
     """Pick a defect type from filename keywords. Returns 'Unclassified'
     if no keyword matches."""
@@ -72,6 +87,30 @@ def heuristic_defect_type_from_filename(filename: str) -> str:
         if keyword in lower:
             return defect_type
     return "Unclassified"
+
+
+def build_ingested_defect_id(
+    ring_id: str,
+    defect_type: str,
+    sequence_number: int,
+) -> str:
+    """
+    Build a defect ID matching the ontology convention.
+
+    Pattern: D-{ring}-{type_letter}-i{seq}
+
+    The 'i' prefix on the sequence number signals that this defect was
+    ingested via the upload page rather than loaded from the ontology.
+    Examples:
+        D-1247-C-i01    Crack at Ring 1247, first ingested
+        D-0923-S-i02    Spall at Ring 0923, second ingested
+        D-Unknown-L-i03 Leak at unknown ring, third ingested
+
+    Falls back to 'Unknown' if ring_id is empty.
+    """
+    ring_clean = (ring_id or "Unknown").strip().replace(" ", "")
+    type_letter = DEFECT_TYPE_LETTER.get(defect_type, "U")
+    return f"D-{ring_clean}-{type_letter}-i{sequence_number:02d}"
 
 
 # -----------------------------------------------------------------------------
