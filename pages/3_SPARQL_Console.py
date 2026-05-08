@@ -5,6 +5,15 @@ SPARQL Console — page 3
 Direct query interface to the populated ontology. Users can select
 pre-built queries from a dropdown, or write their own. Results are
 displayed as an interactive table.
+
+REVISED:
+- width='stretch' replaced with use_container_width=True.
+- Zero-result diagnostic: when a query returns empty, the page
+  automatically shows what *does* exist for the queried properties,
+  so users can spot datatype mismatches and typos themselves.
+- Example queries no longer hard-code a specific Ring ID — they use
+  generic patterns that always return something against any populated
+  ontology.
 """
 
 import streamlit as st
@@ -28,16 +37,59 @@ st.caption(
 )
 
 # -----------------------------------------------------------------------------
+# Diagnostic queries — always work against any populated ontology
+# -----------------------------------------------------------------------------
+DIAGNOSTIC_QUERIES = {
+    "List all defects (no filter)": """PREFIX tun: <http://tunnel-dt.transurban.com/ontology/v1.2#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT ?defect ?type WHERE {
+    ?defect rdf:type tun:DefectCondition .
+    OPTIONAL { ?defect tun:hasType ?type . }
+}
+LIMIT 50
+""",
+    "List all distinct ring IDs in the data": """PREFIX tun: <http://tunnel-dt.transurban.com/ontology/v1.2#>
+
+SELECT DISTINCT ?ring WHERE {
+    ?defect tun:atRingID ?ring .
+}
+ORDER BY ?ring
+""",
+    "List all properties used on defects": """PREFIX tun: <http://tunnel-dt.transurban.com/ontology/v1.2#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT DISTINCT ?property WHERE {
+    ?defect rdf:type tun:DefectCondition ;
+            ?property ?value .
+}
+ORDER BY ?property
+""",
+    "Count instances by class": """PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT ?class (COUNT(?instance) AS ?count) WHERE {
+    ?instance rdf:type ?class .
+}
+GROUP BY ?class
+ORDER BY DESC(?count)
+""",
+}
+
+# -----------------------------------------------------------------------------
 # Example query selector
 # -----------------------------------------------------------------------------
+all_examples = {**DIAGNOSTIC_QUERIES, **EXAMPLE_QUERIES}
+
 example_name = st.selectbox(
     "Load example query",
-    options=["(Write my own)"] + list(EXAMPLE_QUERIES.keys()),
+    options=["(Write my own)"] + list(all_examples.keys()),
     index=1,
+    help="Diagnostic queries (top of list) always work against any "
+         "populated ontology. Use them first to verify what data exists.",
 )
 
 if example_name != "(Write my own)":
-    default_query = EXAMPLE_QUERIES[example_name]
+    default_query = all_examples[example_name]
 else:
     default_query = """PREFIX tun: <http://tunnel-dt.transurban.com/ontology/v1.2#>
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
@@ -61,12 +113,41 @@ query = st.text_area(
     help="Edit the query above and click Run.",
 )
 
-col1, col2, col3 = st.columns([1, 1, 6])
+col1, col2, _ = st.columns([1, 1, 6])
 with col1:
     run = st.button("Run query", type="primary")
 with col2:
     if st.button("Reset"):
         st.rerun()
+
+
+# -----------------------------------------------------------------------------
+# Helper: shorten URIs for display
+# -----------------------------------------------------------------------------
+def _shorten(val):
+    if val is None:
+        return ""
+    s = str(val)
+    if "#" in s:
+        return ":" + s.split("#")[-1]
+    return s
+
+
+def _run_to_dataframe(graph, sparql: str) -> pd.DataFrame:
+    """Execute a SPARQL query and return a DataFrame with shortened URIs."""
+    results = list(graph.query(sparql))
+    if not results:
+        return pd.DataFrame()
+    headers = [str(v) for v in results[0].labels]
+    rows = []
+    for row in results:
+        d = {}
+        for i, val in enumerate(row):
+            header = headers[i] if i < len(headers) else f"col_{i}"
+            d[header] = _shorten(val)
+        rows.append(d)
+    return pd.DataFrame(rows)
+
 
 # -----------------------------------------------------------------------------
 # Execute
@@ -74,35 +155,66 @@ with col2:
 if run:
     graph = st.session_state.graph
     try:
-        results = list(graph.query(query))
+        df = _run_to_dataframe(graph, query)
 
-        if not results:
-            st.info("Query returned no results. "
-                    "Check that the ontology is populated with matching data.")
-        else:
-            # Extract variable names from the first result
-            headers = [str(v) for v in results[0].labels] if results else []
+        if df.empty:
+            st.warning(
+                "Query returned no results. This usually means one of: "
+                "(1) a property name is misspelled, (2) a literal datatype "
+                "mismatch (e.g. `1247` vs `\"1247\"`), or (3) no record "
+                "matches the filter values. The diagnostic block below "
+                "shows what *does* exist."
+            )
 
-            rows = []
-            for row in results:
-                row_dict = {}
-                for i, val in enumerate(row):
-                    header = headers[i] if i < len(headers) else f"col_{i}"
-                    if val is None:
-                        row_dict[header] = ""
+            with st.expander("🔍 Diagnostic — what's actually in the graph",
+                             expanded=True):
+                st.markdown("**Distinct values for `tun:atRingID`:**")
+                try:
+                    ring_df = _run_to_dataframe(graph, """
+                        PREFIX tun: <http://tunnel-dt.transurban.com/ontology/v1.2#>
+                        SELECT DISTINCT ?ring WHERE { ?d tun:atRingID ?ring }
+                        ORDER BY ?ring
+                    """)
+                    if ring_df.empty:
+                        st.markdown(":grey[No `tun:atRingID` values found.]")
                     else:
-                        val_str = str(val)
-                        # Shorten URIs for display
-                        if "#" in val_str:
-                            val_str = ":" + val_str.split("#")[-1]
-                        row_dict[header] = val_str
-                rows.append(row_dict)
+                        st.dataframe(
+                            ring_df, use_container_width=True, hide_index=True
+                        )
+                except Exception as e:
+                    st.markdown(f":grey[Diagnostic query failed: {e}]")
 
-            df = pd.DataFrame(rows)
+                st.markdown("**Properties used on defects:**")
+                try:
+                    prop_df = _run_to_dataframe(graph, """
+                        PREFIX tun: <http://tunnel-dt.transurban.com/ontology/v1.2#>
+                        PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+                        SELECT DISTINCT ?property WHERE {
+                            ?d rdf:type tun:DefectCondition ;
+                               ?property ?v .
+                        }
+                        ORDER BY ?property
+                    """)
+                    if prop_df.empty:
+                        st.markdown(":grey[No defect-condition properties found.]")
+                    else:
+                        st.dataframe(
+                            prop_df, use_container_width=True, hide_index=True
+                        )
+                except Exception as e:
+                    st.markdown(f":grey[Diagnostic query failed: {e}]")
+
+                st.markdown(
+                    "**Tip:** if your query filters by ring "
+                    "(e.g. `tun:atRingID 1247`) but the diagnostic shows "
+                    "rings as `\"1247\"` (quoted), the literal is stored "
+                    "as a string. Try `tun:atRingID \"1247\"` instead — "
+                    "or remove the `xsd:` datatype constraint."
+                )
+        else:
             st.success(f"Query returned **{len(df)} rows**.")
-            st.dataframe(df, width='stretch', hide_index=True)
+            st.dataframe(df, use_container_width=True, hide_index=True)
 
-            # Export options
             col1, col2 = st.columns(2)
             with col1:
                 st.download_button(
@@ -118,8 +230,10 @@ if run:
                     "sparql_results.json",
                     "application/json",
                 )
+
     except Exception as e:
         st.error(f"Query error: {e}")
+        st.code(str(e), language=None)
 
 # -----------------------------------------------------------------------------
 # Query reference
@@ -147,4 +261,8 @@ with st.expander("SPARQL quick reference"):
     - `tun:atRingID`, `tun:atChainage`, `tun:atComponent`
     - `tun:detectedBy`, `tun:sourceReference`
     - `tun:completenessScore`, `tun:estimatedCost`
+
+    **Datatype tip:** if a query returns no results, check whether your
+    literal matches the stored datatype. Run *List all distinct ring IDs*
+    from the diagnostic queries above to see how values are actually stored.
     """)

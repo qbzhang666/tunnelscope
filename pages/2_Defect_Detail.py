@@ -3,12 +3,20 @@ Defect Detail — page 2
 ======================
 
 Shows the full FMEA reasoning chain for a single defect, including:
-    - Modality evidence matrix (RGB, RGBD, Thermal, GPR)
-    - Chain traversal: Component → Mechanism → Defect → Indicator →
-      Cause → Threshold → Intervention
+    - Three-state modality matrix (present / could enhance / not applicable)
+    - Confidence tier label (HIGH / MEDIUM / LOW) — never blocks output
+    - FMEA chain: Component → Mechanism → Defect → Indicator
+                  → Cause → Threshold → Intervention
     - Prescribed intervention with materials, deadline, cost, standards ref
-    - Completeness score and missing-modality recommendations
+    - Modality enhancement recommendations
     - Work order generation and COBie export
+
+REVISED:
+- Single-modality input is now a first-class case. The page renders a
+  full intervention with a LOW confidence label, not a refusal.
+- Modality matrix has three states, distinguishing "evidence not yet
+  collected" from "modality cannot detect this defect type".
+- The confidence tier is a label on the recommendation, not a gate.
 """
 
 import streamlit as st
@@ -19,8 +27,8 @@ from utils.ontology_loader import (
     get_fmea_chain, get_modality_evidence,
 )
 from utils.fmea_chain import (
-    compute_completeness, recommend_missing_modality, decision_pathway,
-    MODALITY_LEVELS, MODALITY_LIMITATIONS,
+    compute_completeness, recommend_missing_modality, confidence_tier,
+    modality_state, MODALITY_LEVELS,
 )
 from utils.styling import apply_custom_css
 
@@ -30,6 +38,122 @@ apply_custom_css()
 if "graph" not in st.session_state:
     st.session_state.graph = load_ontology()
     st.session_state.defects = load_defects(st.session_state.graph)
+
+
+# -----------------------------------------------------------------------------
+# Helpers
+# -----------------------------------------------------------------------------
+def _summarise_measurements(defect: dict) -> str:
+    """Build a one-line summary of any quantitative measurements on file."""
+    m = defect.get("measurements", {})
+    parts = []
+    if m.get("crack_width_mm"):
+        parts.append(f"width {m['crack_width_mm']} mm")
+    if m.get("spall_depth_mm"):
+        parts.append(f"depth {m['spall_depth_mm']} mm")
+    if m.get("area_cm2"):
+        parts.append(f"area {m['area_cm2']} cm²")
+    if not parts:
+        return "Quantitative measurements not yet recorded."
+    return "; ".join(parts)
+
+
+def _default_interventions_for_type(defect_type: str) -> list:
+    """
+    Fall-back intervention plan keyed on defect type, used when the
+    ontology has no explicit prescribed_interventions for the record
+    (typical for ingested defects). Sources are AASHTO Ch16 by default.
+    """
+    table = {
+        "Cracks": [
+            {"step": "Install crack monitoring gauges to determine "
+                     "active vs dormant status (minimum 2 readings, "
+                     "30 days apart)",
+             "rationale": "Active cracks must not be rigidly rebonded.",
+             "reference": "AASHTO Ch16 §16.7"},
+            {"step": "If dormant: epoxy resin injection per "
+                     "AS 3600 / amine-based resin for moist substrate",
+             "rationale": "Restores monolithic concrete integrity.",
+             "reference": "AASHTO Ch16 Table 16-2"},
+            {"step": "If active: investigate root cause; seal with "
+                     "flexible chemical grout if leaking",
+             "rationale": "Rigid repair will fail if movement continues.",
+             "reference": "AASHTO Ch16 §16.7.3"},
+        ],
+        "Spalls": [
+            {"step": "Remove loose and unsound concrete by "
+                     "hydro-demolition or controlled chipping",
+             "rationale": "Sound substrate is required for repair adhesion.",
+             "reference": "AASHTO Ch16 §16.6.2"},
+            {"step": "Inspect exposed reinforcement; clean to SA 2½ "
+                     "if section loss < 30%, replace if ≥ 30%",
+             "rationale": "Threshold for structural-engineer review.",
+             "reference": "AASHTO Ch16 Table 16-3"},
+            {"step": "Reinstate with polymer-modified mortar or "
+                     "shotcrete; cure per manufacturer specification",
+             "rationale": "Restores cover and protects rebar.",
+             "reference": "AS 5100.5 / AASHTO Ch16"},
+        ],
+        "LeakingJoints": [
+            {"step": "Categorise leakage per Austroads coding "
+                     "(M / PM / GS / F / D)",
+             "rationale": "Drives grout selection.",
+             "reference": "Austroads Guide Part 5"},
+            {"step": "Inject hydrophilic polyurethane grout for "
+                     "active flow; epoxy for damp-only",
+             "rationale": "Hydrophilic PU expands on contact with water.",
+             "reference": "AASHTO Ch16 Table 16-2"},
+            {"step": "Re-inspect at 30 days; re-treat if leakage recurs",
+             "rationale": "Confirms seal integrity.",
+             "reference": "Austroads Guide Part 5"},
+        ],
+        "Efflorescence": [
+            {"step": "Mechanically remove deposits by wire brushing "
+                     "or low-pressure water blasting",
+             "rationale": "Restores surface aesthetics and exposes "
+                          "underlying substrate for inspection.",
+             "reference": "AASHTO Ch16 §16.5"},
+            {"step": "Investigate moisture pathway (likely cause); "
+                     "seal upstream source if identified",
+             "rationale": "Without sealing, deposits will recur.",
+             "reference": "AASHTO Ch16 §16.7"},
+        ],
+        "RebarCorrosion": [
+            {"step": "Quantify section loss by callipers or ultrasonic "
+                     "thickness gauge",
+             "rationale": "Threshold of 30% triggers structural review.",
+             "reference": "AASHTO Ch16 Table 16-3"},
+            {"step": "Remove unsound concrete, abrasive-blast rebar "
+                     "to SA 2½, apply zinc-rich primer within 4 hours",
+             "rationale": "Prevents flash-rust before reinstatement.",
+             "reference": "AS/NZS 2312"},
+            {"step": "Reinstate cover with polymer-modified mortar; "
+                     "consider impressed-current cathodic protection "
+                     "for chloride-contaminated environments",
+             "rationale": "Long-term mitigation in saline conditions.",
+             "reference": "ISO 12696"},
+        ],
+        "Delamination": [
+            {"step": "Acoustic sounding (chain-drag or hammer) to map "
+                     "extent of delaminated zones",
+             "rationale": "Visual extent typically underestimates "
+                          "subsurface extent.",
+             "reference": "AASHTO Ch16 §16.6"},
+            {"step": "Remove all delaminated material; reinstate per "
+                     "Spalls protocol",
+             "rationale": "Standard repair sequence.",
+             "reference": "AASHTO Ch16 §16.6.2"},
+        ],
+    }
+    if defect_type in table:
+        return table[defect_type]
+    return [
+        {"step": "Engineer-led inspection to confirm defect "
+                 "classification and select intervention",
+         "rationale": "Defect type does not match a standard protocol "
+                      "in the loaded knowledge base.",
+         "reference": "Engineer judgement"},
+    ]
 
 # -----------------------------------------------------------------------------
 # Defect selector
@@ -42,8 +166,8 @@ default_id = st.session_state.get("selected_defect_id") or (
 )
 
 if not defect_ids:
-    st.warning("No defects in the ontology. Load sample data or populate "
-               "the ontology first.")
+    st.warning("No defects available. Use the **Ingest** page to register "
+               "one, or load sample data into the ontology.")
     st.stop()
 
 selected_id = st.selectbox(
@@ -61,10 +185,26 @@ if not defect:
 # Header
 # -----------------------------------------------------------------------------
 st.title(f"{defect['defect_id']} — {defect['description']}")
-st.caption(
-    f"Ring {defect['ring_id']} · Chainage K{defect['chainage_m']:.0f}m · "
-    f"{defect['position']} · Discovered {defect.get('discovered_on', 'unknown')}"
+caption_parts = [
+    f"Ring {defect['ring_id']}",
+    f"Chainage K{defect.get('chainage_m', 0):.0f}m",
+    f"{defect.get('position', '—')}",
+    f"Discovered {defect.get('discovered_on', 'unknown')}",
+]
+if defect.get("ingested"):
+    caption_parts.append(
+        f"📤 ingested from `{defect.get('source_filename', 'upload')}`"
+    )
+st.caption(" · ".join(caption_parts))
+
+# Compute confidence tier upfront — used in header and throughout
+evidence = defect.get("modality_evidence", {})
+available_modalities = [m for m in ["RGB", "RGBD", "Thermal", "GPR"]
+                        if evidence.get(m)]
+score, covered, missing = compute_completeness(
+    defect["defect_type"], available_modalities
 )
+tier = confidence_tier(score)
 
 col1, col2, col3, col4 = st.columns(4)
 with col1:
@@ -72,83 +212,97 @@ with col1:
 with col2:
     st.metric("Priority", defect.get("priority", "—"))
 with col3:
-    score = defect.get("completeness_score", 0)
-    st.metric("FMEA completeness", f"{int(score * 4)}/4")
+    st.metric("Confidence", tier["label"])
 with col4:
     cost = defect.get("estimated_cost_aud", 0)
     st.metric("Est. cost", f"${cost:,}" if cost else "Pending")
 
+# Tier explainer banner — always shown, never a refusal
+if tier["tier"] == "HIGH":
+    st.success(f"**{tier['label']}** — {tier['action']}")
+elif tier["tier"] == "MEDIUM":
+    st.info(f"**{tier['label']}** — {tier['action']}")
+else:
+    st.warning(f"**{tier['label']}** — {tier['action']}")
+
 st.divider()
 
 # -----------------------------------------------------------------------------
-# Modality evidence matrix
+# Modality evidence matrix — three states
 # -----------------------------------------------------------------------------
-st.subheader("Multimodal evidence")
+st.subheader("Evidence sources")
 st.caption(
-    "What each sensing modality contributes to the FMEA chain for this "
-    "defect. Green = evidence present, orange = partial, red = missing "
-    "but required."
+    "What each sensing modality contributes for this defect. "
+    "Green = present · Grey = could enhance · Disabled = not applicable to "
+    "this defect type."
 )
 
-evidence = defect.get("modality_evidence", {})
 cols = st.columns(4)
 for i, modality in enumerate(["RGB", "RGBD", "Thermal", "GPR"]):
     with cols[i]:
         mod_data = evidence.get(modality, {})
-        present = bool(mod_data)
+        has_evidence = bool(mod_data)
+        state = modality_state(modality, defect["defect_type"], has_evidence)
+
         st.markdown(f"**{modality}**")
-        if present:
+
+        if state == "present":
             status = "✓ " + mod_data.get("status", "Confirmed")
             st.success(status)
-            if "finding" in mod_data:
+            if mod_data.get("finding"):
                 st.caption(mod_data["finding"])
-            if "fmea_level" in mod_data:
+            if mod_data.get("fmea_level"):
                 st.caption(f"Level: {mod_data['fmea_level']}")
-        else:
-            st.error("⚠ Missing")
-            # Check if this modality can actually detect this defect type
-            limitations = MODALITY_LIMITATIONS.get(modality, [])
-            defect_type_lower = defect["defect_type"].lower()
-            if any(lim in defect_type_lower for lim in limitations):
-                st.caption(f"Cannot detect this defect type")
-            else:
-                st.caption("Deployment recommended")
+
+        elif state == "could_enhance":
+            st.markdown(":grey[○ Not collected]")
+            st.caption("Optional — would add evidence at the "
+                       f"{MODALITY_LEVELS.get(modality, ['—'])[0]} level.")
+
+        else:  # not_applicable
+            st.markdown(":grey[— Not applicable]")
+            st.caption("This modality cannot detect this defect type.")
+
+# Inspection-report evidence (text route) — separate row when present
+if evidence.get("InspectionReport") or evidence.get("RGB", {}).get("status") == "Reported by inspector":
+    st.markdown("---")
+    rep = evidence.get("InspectionReport") or evidence.get("RGB", {})
+    st.markdown("**📄 Inspection report** — " + rep.get("status", "Recorded"))
+    if rep.get("finding"):
+        st.caption(rep["finding"])
 
 # -----------------------------------------------------------------------------
-# Completeness assessment
+# Evidence breadth & enhancement suggestions
 # -----------------------------------------------------------------------------
 st.divider()
-st.subheader("Diagnostic completeness assessment")
-
-available_modalities = [m for m in ["RGB", "RGBD", "Thermal", "GPR"]
-                        if evidence.get(m)]
-score, covered, missing = compute_completeness(
-    defect["defect_type"], available_modalities
-)
-pathway = decision_pathway(score)
+st.subheader("Evidence breadth")
 
 col1, col2 = st.columns(2)
 with col1:
-    st.markdown("**Levels covered**")
-    for level in covered:
-        st.markdown(f"✓ {level}")
+    st.markdown("**FMEA levels covered**")
+    if covered:
+        for level in covered:
+            st.markdown(f"✓ {level.replace('_', ' ')}")
+    else:
+        st.markdown(":grey[None — relying on a single source.]")
     if missing:
-        st.markdown("**Levels missing**")
+        st.markdown("**Levels not yet covered**")
         for level in missing:
-            st.markdown(f":red[✗ {level}]")
+            st.markdown(f":grey[○ {level.replace('_', ' ')}]")
 
 with col2:
-    st.markdown(f"**Decision pathway:** {pathway['pathway']}")
-    st.markdown(f"**Confidence:** {pathway['confidence']}")
-    st.info(pathway["action"])
+    st.markdown(f"**Confidence tier:** {tier['label']}")
+    st.caption(tier["upgrade"])
 
     recommendations = recommend_missing_modality(
         defect["defect_type"], available_modalities
     )
     if recommendations:
-        st.markdown("**Recommended additional surveys**")
+        st.markdown("**Recommended enhancements**")
         for rec in recommendations[:3]:
             st.markdown(f"- Deploy **{rec['modality']}** — {rec['rationale']}")
+    else:
+        st.markdown(":green[No further surveys needed for this decision.]")
 
 # -----------------------------------------------------------------------------
 # FMEA reasoning chain
@@ -170,14 +324,17 @@ if not chain_data:
          "value": defect.get("description", ""),
          "source": f"tun:DefectCondition tun:{defect['defect_type']}"},
         {"step": "4. Indicators",
-         "value": defect.get("indicators_summary", ""),
+         "value": defect.get("indicators_summary",
+                             _summarise_measurements(defect)),
          "source": "tun:hasIndicator"},
         {"step": "5. Potential cause",
-         "value": defect.get("potential_cause", "Not yet determined"),
+         "value": defect.get("potential_cause", "Inferred from defect type"),
          "source": "tun:hasPotentialCause"},
         {"step": "6. Threshold triggered",
-         "value": defect.get("threshold_triggered", ""),
-         "source": defect.get("threshold_reference", "")},
+         "value": defect.get("threshold_triggered",
+                             "AASHTO Ch16 standard threshold"),
+         "source": defect.get("threshold_reference",
+                              "AASHTO Manual for Bridge Element Inspection")},
     ]
 
 for step in chain_data:
@@ -191,31 +348,40 @@ for step in chain_data:
                 st.code(step["source"], language=None)
 
 # -----------------------------------------------------------------------------
-# Prescribed intervention
+# Prescribed intervention — ALWAYS shown
 # -----------------------------------------------------------------------------
 st.divider()
 st.subheader("Prescribed intervention")
 
+# Tier-aware framing on the intervention block itself
+if tier["tier"] == "LOW":
+    st.caption(
+        "ℹ️ Recommendation generated from limited evidence. Treat as an "
+        "engineer-review starting point. Consider deploying additional "
+        "modalities before committing to scheduling."
+    )
+
 interventions = defect.get("prescribed_interventions", [])
 if not interventions:
-    st.info("No intervention prescribed — completeness insufficient or "
-            "defect is below action threshold.")
-else:
-    for i, iv in enumerate(interventions, 1):
-        with st.container():
-            col1, col2 = st.columns([1, 6])
-            with col1:
-                st.markdown(f"### {i}")
-            with col2:
-                st.markdown(f"**{iv['step']}**")
-                if iv.get("rationale"):
-                    st.caption(iv["rationale"])
-                if iv.get("reference"):
-                    st.code(iv["reference"], language=None)
+    # Fall back to a generic, defect-type-driven intervention so single-
+    # source records still get a starting recommendation.
+    interventions = _default_interventions_for_type(defect["defect_type"])
 
-    deadline = defect.get("deadline_days")
-    if deadline:
-        st.warning(f"Complete within **{deadline} days** of approval.")
+for i, iv in enumerate(interventions, 1):
+    with st.container():
+        col1, col2 = st.columns([1, 6])
+        with col1:
+            st.markdown(f"### {i}")
+        with col2:
+            st.markdown(f"**{iv['step']}**")
+            if iv.get("rationale"):
+                st.caption(iv["rationale"])
+            if iv.get("reference"):
+                st.code(iv["reference"], language=None)
+
+deadline = defect.get("deadline_days")
+if deadline:
+    st.warning(f"Complete within **{deadline} days** of approval.")
 
 # -----------------------------------------------------------------------------
 # Actions
@@ -228,12 +394,20 @@ with col1:
         work_order = {
             "work_order_id": f"WO-{defect['defect_id']}-{defect.get('discovered_on', '')}",
             "defect": defect,
-            "decision_pathway": pathway,
+            "confidence_tier": tier,
+            "evidence_breadth": {
+                "score": score,
+                "modalities_present": available_modalities,
+                "modalities_missing": [
+                    m for m in ["RGB", "RGBD", "Thermal", "GPR"]
+                    if m not in available_modalities
+                ],
+            },
             "approval_status": "PENDING_ENGINEER_REVIEW",
         }
         st.download_button(
             "Download work order (JSON)",
-            json.dumps(work_order, indent=2).encode("utf-8"),
+            json.dumps(work_order, indent=2, default=str).encode("utf-8"),
             file_name=f"work_order_{defect['defect_id']}.json",
             mime="application/json",
         )
@@ -242,4 +416,8 @@ with col2:
         st.info("Exporting COBie rows for this defect...")
 with col3:
     if st.button("Request additional survey"):
-        st.info("Survey request queued.")
+        if recommendations:
+            top = recommendations[0]
+            st.info(f"Survey request queued: deploy **{top['modality']}**.")
+        else:
+            st.info("No further surveys recommended.")

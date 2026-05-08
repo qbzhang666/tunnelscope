@@ -45,6 +45,14 @@ with col3:
 with col4:
     st.metric("Individuals", len(individuals))
 
+# Smoke-test warning if anything came back zero
+if any(len(x) == 0 for x in [classes, obj_props, data_props]):
+    st.warning(
+        "One or more of the metric counts is zero. The ontology may not "
+        "have loaded correctly. Check that `ontology/tunnel_maintenance.ttl` "
+        "exists and parses as Turtle."
+    )
+
 tab1, tab2, tab3, tab4 = st.tabs([
     "Class hierarchy", "Object properties", "Data properties", "Individuals",
 ])
@@ -55,7 +63,6 @@ tab1, tab2, tab3, tab4 = st.tabs([
 with tab1:
     st.markdown("### Class hierarchy")
 
-    # Build hierarchy tree
     def get_children(parent):
         return sorted([
             c for c in graph.subjects(RDFS.subClassOf, parent)
@@ -69,11 +76,9 @@ with tab1:
         comment_text = f" — *{str(comment[0])}*" if comment else ""
         st.markdown(f"{indent}• **{label}**{comment_text}",
                     unsafe_allow_html=True)
-
         for child in get_children(cls):
             display_class(child, depth + 1)
 
-    # Find root classes (no parent or parent is owl:Thing)
     root_classes = [
         c for c in classes
         if not list(graph.objects(c, RDFS.subClassOf))
@@ -95,7 +100,7 @@ with tab2:
     st.caption("Relations between individuals (e.g., hasCause, atComponent).")
 
     for prop in sorted(obj_props, key=str):
-        if not "#" in str(prop):
+        if "#" not in str(prop):
             continue
         label = str(prop).split("#")[-1]
         domain = list(graph.objects(prop, RDFS.domain))
@@ -118,7 +123,7 @@ with tab3:
     st.caption("Attributes of individuals (e.g., crackWidth, chainageM).")
 
     for prop in sorted(data_props, key=str):
-        if not "#" in str(prop):
+        if "#" not in str(prop):
             continue
         label = str(prop).split("#")[-1]
         domain = list(graph.objects(prop, RDFS.domain))
@@ -140,7 +145,6 @@ with tab4:
     st.markdown("### Named individuals (ABox)")
     st.caption("Specific defect instances, components, and interventions.")
 
-    # Group by type
     type_groups = {}
     for ind in individuals:
         types = [t for t in graph.objects(ind, RDF.type)

@@ -2,13 +2,20 @@
 CV to COBie Bridge — page 4
 ===========================
 
-Interactive demonstration of the defect semantic extraction layer:
-takes CV pipeline output (JSON) and converts it into COBie spreadsheet
-rows through the three sub-stages:
+Interactive demonstration of the multimodal defect semantic extraction
+layer. Takes structured CV pipeline output (JSON) — typically produced
+by an upstream computer-vision pipeline running over RGB / RGBD /
+Thermal / GPR data — and converts it into COBie spreadsheet rows
+through the three sub-stages:
 
     Stage A — geolocate (pixel to 3D to chainage)
     Stage B — extract attributes (dimensions, moisture code, severity)
     Stage C — component linkage and COBie row population
+
+REVISED:
+- width='stretch' replaced with use_container_width=True.
+- Page reframed as the *advanced/multimodal* route. For a single image
+  or a written report, the **Ingest** page is the entry point.
 """
 
 import json
@@ -28,9 +35,16 @@ apply_custom_css()
 
 st.title("CV → COBie bridge")
 st.caption(
-    "Demonstrates how computer vision output (masks, bounding boxes, "
-    "class labels) is converted to COBie spreadsheet rows through the "
-    "defect semantic extraction layer."
+    "Demonstrates how structured computer-vision output (masks, bounding "
+    "boxes, class labels) from a multimodal survey is converted to COBie "
+    "spreadsheet rows through the defect semantic extraction layer."
+)
+
+st.info(
+    "**Got a single inspection photo or a written report?** Use the "
+    "**Ingest** page in the sidebar — it's designed for the common case "
+    "of a single source. This page is for structured output from an "
+    "upstream multimodal CV pipeline."
 )
 
 # -----------------------------------------------------------------------------
@@ -127,7 +141,7 @@ if cv_output:
                     cv_output.get("camera_pose", {}),
                     cv_output.get("image_metadata", {}),
                 )
-                st.caption(f"Pixel centroid → 3D → chainage")
+                st.caption("Pixel centroid → 3D → chainage")
                 st.code(f"""chainage_m: {geo['chainage_m']}
 ring_id: {geo['ring_id']}
 angle: {geo['circumferential_angle_deg']}°
@@ -151,7 +165,7 @@ zone: {geo['position_zone']}""", language=None)
                     severity = assign_spall_severity(measurements["depth_mm"])
                 priority = assign_priority(defect_type, severity, moisture)
 
-                st.caption(f"Classify and measure")
+                st.caption("Classify and measure")
                 st.code(f"""defect_type: {defect_type}
 moisture_code: {moisture}
 severity: {severity or 'N/A'}
@@ -161,7 +175,7 @@ priority: {priority}""", language=None)
             with col3:
                 st.markdown("**Stage C — Link component**")
                 component = f"Ring_{geo['ring_id']}"
-                st.caption(f"Find nearest BIM component")
+                st.caption("Find nearest BIM component")
                 st.code(f"""component: {component}
 cobie_sheet: Defect
 cobie_row: {mask['id']}""", language=None)
@@ -182,7 +196,7 @@ cobie_row: {mask['id']}""", language=None)
         sheet_df = df[df["sheet"] == sheet].drop(columns=["sheet"])
         sheet_df = sheet_df.dropna(axis=1, how="all")
         st.markdown(f"**{sheet}** — {len(sheet_df)} row(s)")
-        st.dataframe(sheet_df, width='stretch', hide_index=True)
+        st.dataframe(sheet_df, use_container_width=True, hide_index=True)
 
     # Downloads
     col1, col2 = st.columns(2)

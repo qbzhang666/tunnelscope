@@ -3,8 +3,15 @@ Defect Register — page 1
 ========================
 
 Ranked list of all defects in the active tunnel, with filtering by
-priority, type, and completeness. Clicking a defect navigates to the
+priority, type, and evidence breadth. Clicking a defect navigates to the
 Defect Detail page.
+
+REVISED:
+- width='stretch' replaced with use_container_width=True (compatibility
+  with Streamlit < 1.49 on Cloud).
+- New "Evidence" column shows how many of the four modalities have data,
+  framed neutrally rather than as a deficiency score.
+- Defects ingested via the Ingest page are merged into the listing.
 """
 
 import streamlit as st
@@ -23,8 +30,9 @@ if "graph" not in st.session_state:
 
 st.title("Defect register")
 st.caption(
-    "All detected defects across the active tunnel, ranked by priority. "
-    "Filter and sort, then click **View** to see the full FMEA chain."
+    "All detected defects across the active tunnel. Filter and sort, "
+    "then click a row to select. Evidence breadth (how many modalities "
+    "informed the record) is shown but does not gate intervention."
 )
 
 defects = st.session_state.defects
@@ -48,29 +56,41 @@ with st.expander("Filters", expanded=True):
             default=[],
         )
     with col3:
-        min_completeness = st.slider(
-            "Min. FMEA completeness",
-            min_value=0.0, max_value=1.0,
-            value=0.0, step=0.25,
+        source_filter = st.multiselect(
+            "Source",
+            options=["Ontology", "Ingested (this session)"],
+            default=[],
+            help="Filter by whether a defect came from the ontology or "
+                 "was uploaded on the Ingest page.",
         )
     with col4:
         sort_by = st.selectbox(
             "Sort by",
-            options=["Priority + completeness", "Chainage", "Cost (high-low)",
-                    "Date discovered"],
+            options=["Priority", "Chainage", "Cost (high-low)",
+                     "Date discovered", "Evidence breadth"],
             index=0,
         )
 
 # Apply filters
+def _passes_source_filter(defect):
+    if not source_filter:
+        return True
+    is_ingested = defect.get("ingested", False)
+    if "Ingested (this session)" in source_filter and is_ingested:
+        return True
+    if "Ontology" in source_filter and not is_ingested:
+        return True
+    return False
+
 filtered = [
     d for d in defects
     if (not type_filter or d["defect_type"] in type_filter)
     and (not priority_filter or d.get("priority") in priority_filter)
-    and d.get("completeness_score", 0) >= min_completeness
+    and _passes_source_filter(d)
 ]
 
 # Apply sort
-if sort_by == "Priority + completeness":
+if sort_by == "Priority":
     priority_order = {"HIGH": 0, "MEDIUM": 1, "LOW": 2}
     filtered.sort(
         key=lambda d: (
@@ -84,6 +104,8 @@ elif sort_by == "Cost (high-low)":
     filtered.sort(key=lambda d: -d.get("estimated_cost_aud", 0))
 elif sort_by == "Date discovered":
     filtered.sort(key=lambda d: d.get("discovered_on", ""), reverse=True)
+elif sort_by == "Evidence breadth":
+    filtered.sort(key=lambda d: -d.get("completeness_score", 0))
 
 st.write(f"**{len(filtered)} defects** match current filters.")
 
@@ -93,24 +115,37 @@ st.write(f"**{len(filtered)} defects** match current filters.")
 if filtered:
     table_data = []
     for d in filtered:
-        score = d.get("completeness_score", 0)
-        completeness_str = f"{int(score * 4)}/4"
+        # Count modalities with evidence (out of 4) instead of showing a
+        # completeness score that suggests deficiency.
+        evidence = d.get("modality_evidence", {})
+        modality_count = sum(
+            1 for m in ["RGB", "RGBD", "Thermal", "GPR"]
+            if evidence.get(m)
+        )
+        evidence_str = f"{modality_count}/4 modalities"
+
         cost = d.get("estimated_cost_aud", 0)
         cost_str = f"${cost:,}" if cost else "pending"
+
+        source = "Ingested" if d.get("ingested") else "Ontology"
 
         table_data.append({
             "ID": d["defect_id"],
             "Description": d["description"],
-            "Location": f"Ring {d['ring_id']} · K{d['chainage_m']:.0f}m · {d['position']}",
+            "Location": (
+                f"Ring {d['ring_id']} · "
+                f"K{d.get('chainage_m', 0):.0f}m · "
+                f"{d.get('position', '—')}"
+            ),
             "Type": d["defect_type"],
             "Priority": d.get("priority", "—"),
-            "Completeness": completeness_str,
+            "Evidence": evidence_str,
+            "Source": source,
             "Est. cost": cost_str,
         })
 
     df = pd.DataFrame(table_data)
 
-    # Streamlit native dataframe with selection
     event = st.dataframe(
         df,
         use_container_width=True,
@@ -120,7 +155,8 @@ if filtered:
         column_config={
             "ID": st.column_config.TextColumn(width="small"),
             "Priority": st.column_config.TextColumn(width="small"),
-            "Completeness": st.column_config.TextColumn(width="small"),
+            "Evidence": st.column_config.TextColumn(width="small"),
+            "Source": st.column_config.TextColumn(width="small"),
             "Est. cost": st.column_config.TextColumn(width="small"),
         },
     )
@@ -155,7 +191,7 @@ with col1:
 with col2:
     if filtered:
         import json
-        jsonstr = json.dumps(filtered, indent=2).encode("utf-8")
+        jsonstr = json.dumps(filtered, indent=2, default=str).encode("utf-8")
         st.download_button(
             "Download as JSON",
             jsonstr,
