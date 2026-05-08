@@ -1,13 +1,16 @@
-PREFIX tun: <http://tunnel-dt.transurban.com/ontology/v1.2#>
+PREFIX tun: <http://w3id.org/tunnel-dt/ontology/v1.2#>
 
 # Traverse the full FMEA reasoning chain for a specific defect
 # Replace {DEFECT_ID} with the target defect identifier
+#
+# All joins are OPTIONAL so a partial chain (e.g. defect with no
+# explicit component link) still returns a row.
 
 SELECT ?component ?mechanism ?indicator ?indValue
        ?cause ?intervention ?sourceRef
 WHERE {
-    tun:{DEFECT_ID} tun:atComponent ?component ;
-                    tun:hasMechanism ?mechanism .
+    OPTIONAL { tun:{DEFECT_ID} tun:atComponent ?component . }
+    OPTIONAL { tun:{DEFECT_ID} tun:hasMechanism ?mechanism . }
     OPTIONAL {
         tun:{DEFECT_ID} tun:hasIndicator ?indicator .
         ?indicator tun:indicatorValue ?indValue .

@@ -1,15 +1,19 @@
-PREFIX tun: <http://tunnel-dt.transurban.com/ontology/v1.2#>
+PREFIX tun: <http://w3id.org/tunnel-dt/ontology/v1.2#>
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 
 # Find all defects at a specific ring ID
 # Replace {RING_ID} with the target ring number
+#
+# Uses rdf:type/rdfs:subClassOf* so subclass-typed defects (Cracks,
+# Spalls, LeakingJoints, ...) are matched without OWL reasoning.
 
 SELECT ?defect ?type ?mechanism ?severity ?priority
 WHERE {
-    ?defect rdf:type tun:DefectCondition ;
-            tun:atRingID {RING_ID} ;
-            tun:hasType ?type ;
-            tun:hasMechanism ?mechanism .
+    ?defect rdf:type/rdfs:subClassOf* tun:DefectCondition ;
+            tun:atRingID {RING_ID} .
+    OPTIONAL { ?defect tun:hasType ?type . }
+    OPTIONAL { ?defect tun:hasMechanism ?mechanism . }
     OPTIONAL { ?defect tun:hasSeverity ?severity . }
     OPTIONAL { ?defect tun:hasPriority ?priority . }
 }

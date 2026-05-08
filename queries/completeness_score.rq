@@ -1,4 +1,4 @@
-PREFIX tun: <http://tunnel-dt.transurban.com/ontology/v1.2#>
+PREFIX tun: <http://w3id.org/tunnel-dt/ontology/v1.2#>
 
 # Compute the diagnostic completeness score for a specific defect
 # Replace {DEFECT_ID} with the target defect identifier

@@ -1,11 +1,14 @@
-PREFIX tun: <http://tunnel-dt.transurban.com/ontology/v1.2#>
+PREFIX tun: <http://w3id.org/tunnel-dt/ontology/v1.2#>
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 
 # Count defects detected by each modality
+#
+# Uses rdf:type/rdfs:subClassOf* so subclass-typed defects are matched.
 
 SELECT ?modality (COUNT(?defect) AS ?defectCount)
 WHERE {
-    ?defect rdf:type tun:DefectCondition ;
+    ?defect rdf:type/rdfs:subClassOf* tun:DefectCondition ;
             tun:detectedBy ?modality .
 }
 GROUP BY ?modality
