@@ -44,11 +44,16 @@ graph = st.session_state.graph
 graph_size = len(graph)
 
 # Check whether the graph has any defect *instances*, not just classes.
+# Uses rdf:type/rdfs:subClassOf* so subclass-typed defects (Cracks,
+# Spalls, LeakingJoints, ...) are counted alongside ones typed directly
+# as DefectCondition. Without the property path, rdflib counts only
+# direct-typed instances and misses the rest.
 instance_check = """
 PREFIX tun: <http://w3id.org/tunnel-dt/ontology/v1.2#>
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-SELECT (COUNT(?d) AS ?count) WHERE {
-    ?d rdf:type tun:DefectCondition .
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT (COUNT(DISTINCT ?d) AS ?count) WHERE {
+    ?d rdf:type/rdfs:subClassOf* tun:DefectCondition .
 }
 """
 try:
@@ -118,13 +123,15 @@ SELECT ?child ?parent WHERE {
 }
 ORDER BY ?parent ?child
 """,
-    "Instances — list all defect instances (if materialised)": """PREFIX tun: <http://w3id.org/tunnel-dt/ontology/v1.2#>
+    "Instances — list all defect instances (subclass-aware)": """PREFIX tun: <http://w3id.org/tunnel-dt/ontology/v1.2#>
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 
 SELECT ?defect ?type WHERE {
-    ?defect rdf:type tun:DefectCondition .
+    ?defect rdf:type/rdfs:subClassOf* tun:DefectCondition .
     OPTIONAL { ?defect tun:hasType ?type . }
 }
+ORDER BY ?defect
 LIMIT 50
 """,
     "Instances — distinct ring IDs in the graph": """PREFIX tun: <http://w3id.org/tunnel-dt/ontology/v1.2#>

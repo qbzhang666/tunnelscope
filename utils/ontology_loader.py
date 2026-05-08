@@ -5,7 +5,7 @@ Loads the OWL/Turtle ontology exported from Protégé into an rdflib
 graph, caches it in Streamlit's session cache, and provides helper
 functions to extract defect instances for display.
 
-REVISIONS (Rev 4)
+REVISIONS (Rev 5)
 -----------------
 1. Namespace migration: tunnel-dt.transurban.com -> w3id.org/tunnel-dt.
 2. SPARQL subclass-traversal fix. Defects are typed as subclasses of
@@ -19,6 +19,10 @@ REVISIONS (Rev 4)
    back into the graph as triples — so SPARQL Console queries can
    reach every defect, regardless of whether it came from the TTL or
    the JSON.
+4. Type-to-class table now covers every defect type used in the JSON
+   sample data (added: Staining, Honeycombing, ConstructionJointDefect).
+   Lookup is case-insensitive and whitespace-tolerant as
+   defence-in-depth against minor spelling drift.
 """
 
 import json
@@ -140,7 +144,15 @@ def _materialise_json_defects_into_graph(g: Graph) -> None:
         "Delaminations": TUN.Delaminations,
         "Efflorescence": TUN.Efflorescence,
         "RebarCorrosion": TUN.RebarCorrosion,
+        "Staining": TUN.Staining,
+        "Honeycombing": TUN.Honeycombing,
+        "ConstructionJointDefect": TUN.ConstructionJointDefect,
+        "Unclassified": TUN.DefectCondition,
     }
+    # Build a case-insensitive lookup as defence-in-depth, so a JSON
+    # value like "leakingjoints" or "Cracks " (trailing space) still
+    # matches the canonical class.
+    type_to_class_ci = {k.lower().strip(): v for k, v in type_to_class.items()}
 
     for d in defects:
         defect_id = d.get("defect_id")
@@ -154,13 +166,20 @@ def _materialise_json_defects_into_graph(g: Graph) -> None:
             continue
 
         defect_type = d.get("defect_type", "")
-        cls = type_to_class.get(defect_type, TUN.DefectCondition)
+        # Try the case-insensitive normalised lookup; fall back to the
+        # generic DefectCondition class only if truly unknown.
+        cls = type_to_class_ci.get(
+            (defect_type or "").lower().strip(),
+            TUN.DefectCondition,
+        )
         g.add((subj, RDF.type, cls))
         g.add((subj, RDF.type, OWL.NamedIndividual))
 
         # Ensure the subclass relationship exists for the rdfs:subClassOf*
-        # property path to traverse correctly
-        g.add((cls, RDFS.subClassOf, TUN.DefectCondition))
+        # property path to traverse correctly. Skip if cls is already
+        # DefectCondition (avoids a self-referencing subClassOf triple).
+        if cls != TUN.DefectCondition:
+            g.add((cls, RDFS.subClassOf, TUN.DefectCondition))
 
         if defect_type:
             g.add((subj, TUN.hasType, Literal(defect_type)))
