@@ -456,3 +456,117 @@ def position_from_offset(perp_offset_m: float) -> str:
     if perp_offset_m < 5:
         return "Crown"
     return "Sidewall"
+
+
+# -----------------------------------------------------------------------------
+# Confirmation map — for the form-first flow on Ingest
+# -----------------------------------------------------------------------------
+def build_confirmation_map(
+    tunnel_id: str,
+    chainage_m: Optional[float] = None,
+    ring_id: Optional[str] = None,
+    height: int = 380,
+) -> folium.Map:
+    """
+    Render a confirmation map showing the selected tunnel and a marker
+    at the chainage the operator typed in the form.
+
+    This is the 'reflect on map' step in the revised form-first flow:
+    the operator types a ring/chainage, the map shows where that lands
+    so the operator can verify before submitting.
+    """
+    geom = load_tunnel_geometry()
+    tunnels = geom.get("tunnels", [])
+    selected = next(
+        (t for t in tunnels if t["tunnel_id"] == tunnel_id), None
+    )
+
+    if selected is None:
+        return build_overview_map([], height=height)
+
+    alignment = selected.get("alignment", [])
+    centre = _midpoint(alignment) if alignment else (-37.82, 144.95)
+
+    # If a chainage was given, centre on that point so the marker is
+    # visible and the operator's eye lands on it
+    marker_coords = None
+    if chainage_m is not None and len(alignment) >= 2:
+        marker_coords = _chainage_to_coords(
+            chainage_m, alignment, selected.get("ring_length_m", 1.6)
+        )
+        if marker_coords is not None:
+            centre = marker_coords
+
+    m = folium.Map(
+        location=centre,
+        zoom_start=15 if marker_coords else 13,
+        tiles="OpenStreetMap",
+        height=height,
+    )
+
+    # Other tunnels (faded)
+    for t in tunnels:
+        if t["tunnel_id"] == tunnel_id:
+            continue
+        a = t.get("alignment", [])
+        if len(a) >= 2:
+            folium.PolyLine(
+                locations=a,
+                color=TUNNEL_COLOURS.get(t["tunnel_id"], "#999999"),
+                weight=2,
+                opacity=0.30,
+                dash_array="4 8",
+                tooltip=f"{t['label']} (not selected)",
+            ).add_to(m)
+
+    # Selected tunnel (prominent)
+    if len(alignment) >= 2:
+        colour = TUNNEL_COLOURS.get(tunnel_id, "#1f78b4")
+        folium.PolyLine(
+            locations=alignment,
+            color=colour,
+            weight=6,
+            opacity=1.0,
+            tooltip=f"{selected['label']}",
+        ).add_to(m)
+
+        # Portals
+        for portal_key, portal in selected.get("portals", {}).items():
+            folium.Marker(
+                location=portal["coords"],
+                icon=folium.Icon(color="black", icon="info-sign"),
+                tooltip=f"{selected['label']} · {portal['label']}",
+            ).add_to(m)
+
+        # River crossings
+        for rx in selected.get("river_crossings", []):
+            folium.Marker(
+                location=rx["approx_coords"],
+                icon=folium.Icon(color="blue", icon="tint", prefix="fa"),
+                tooltip=f"{rx['name']} · ~K{rx.get('approx_chainage_m', '?')}m",
+            ).add_to(m)
+
+    # Defect-location marker — the focus of the confirmation map
+    if marker_coords is not None:
+        ring_label = f"Ring {ring_id}" if ring_id else f"K{chainage_m:.0f}m"
+        folium.Marker(
+            location=marker_coords,
+            icon=folium.Icon(color="red", icon="map-marker", prefix="fa"),
+            tooltip=f"Entered location: {ring_label} (K{chainage_m:.0f}m)",
+            popup=(
+                f"<b>{ring_label}</b><br>"
+                f"Chainage: K{chainage_m:.0f}m<br>"
+                f"Tunnel: {selected['label']}"
+            ),
+        ).add_to(m)
+        # Also draw a small radius circle so it's easier to see at zoom-out
+        folium.CircleMarker(
+            location=marker_coords,
+            radius=12,
+            color="#d62728",
+            fill=False,
+            weight=2,
+            opacity=0.6,
+        ).add_to(m)
+
+    return m

@@ -6,21 +6,21 @@ Single-modality entry point. Operators register a defect from:
     - an inspection image (PNG/JPG/JPEG), or
     - an inspection report (PDF/DOCX/TXT)
 
-REVISED (Rev 6):
-- Tunnel selector at the top — operator picks Tunnel A or Tunnel B
-  before uploading anything.
-- Interactive map below the file uploader. Operator clicks where they
-  took the photo. The click resolves to (chainage_m, ring_id, position)
-  and pre-fills the form below.
-- For the heuristic stub route on text reports, any ring number found
-  by regex is cross-checked against the map click — disagreement is
-  surfaced to the operator before submission.
+REVISED (Rev 6b):
+- FORM-FIRST FLOW. Operators upload a source, choose extraction method,
+  fill in (or accept) ring/chainage values, then a CONFIRMATION map
+  appears below the form showing where their entered location projects
+  to on the alignment. The map is now an output (verification), not an
+  input (selection).
+- Heuristic stub still extracts ring/chainage from filename or text and
+  pre-fills the form.
+- Newly-registered defects are appended to st.session_state.defects so
+  they appear immediately on the Defect Register's map and table.
 """
 
-from typing import Dict, Optional
+from typing import Dict
 
 import streamlit as st
-from streamlit_folium import st_folium
 
 from utils.ontology_loader import load_ontology, load_defects
 from utils.styling import apply_custom_css
@@ -30,10 +30,7 @@ from utils.ingest import (
     heuristic_fields_from_text, build_defect_dict,
     build_ingested_defect_id,
 )
-from utils.gis import (
-    list_tunnels, build_ingest_map, click_to_tunnel_location,
-    position_from_offset,
-)
+from utils.gis import list_tunnels, build_confirmation_map
 
 st.set_page_config(page_title="Ingest", layout="wide")
 apply_custom_css()
@@ -45,16 +42,13 @@ if "graph" not in st.session_state:
 if "ingested_defects" not in st.session_state:
     st.session_state.ingested_defects = []
 
-# Per-session state for the map workflow
-if "ingest_picked_location" not in st.session_state:
-    st.session_state.ingest_picked_location = None  # type: Optional[Dict]
-
 
 st.title("Ingest a defect")
 st.caption(
-    "Register a defect from a single inspection photo or a written "
-    "inspection report. Pick the tunnel and click on the map to "
-    "locate the defect — ring and chainage are derived from the click."
+    "Register a defect from a single inspection photo or written "
+    "inspection report. After you've entered ring and chainage, the "
+    "map below the form will show where the location projects to so "
+    "you can verify before submitting."
 )
 
 # -----------------------------------------------------------------------------
@@ -85,79 +79,10 @@ picked_label = st.radio(
 picked_tunnel_id = tunnel_label_to_id[picked_label]
 picked_tunnel = tunnel_options[picked_tunnel_id]
 
-# -----------------------------------------------------------------------------
-# Click-to-locate map
-# -----------------------------------------------------------------------------
-st.subheader("Locate the defect on the map")
-st.caption(
-    "Click anywhere on the highlighted tunnel alignment. The system "
-    "back-derives chainage, ring ID, and a coarse position zone. "
-    "Picking visually is more reliable than typing a ring number."
-)
-
-# Re-render the map with the previously-picked chainage if any
-prev_pick = st.session_state.ingest_picked_location
-prev_chainage = (
-    prev_pick["chainage_m"]
-    if prev_pick and prev_pick.get("tunnel_id") == picked_tunnel_id
-    else None
-)
-
-m = build_ingest_map(picked_tunnel_id, selected_chainage=prev_chainage)
-map_state = st_folium(
-    m,
-    width=None,
-    height=450,
-    returned_objects=["last_clicked"],
-    key=f"ingest_map_{picked_tunnel_id}",
-)
-
-# Resolve click → tunnel location
-last_click = map_state.get("last_clicked") if map_state else None
-if last_click:
-    resolved = click_to_tunnel_location(
-        last_click["lat"], last_click["lng"],
-        candidate_tunnel_ids=[picked_tunnel_id],
-    )
-    if resolved is None:
-        st.warning(
-            "Click was too far from the tunnel alignment to project "
-            "(>500 m). Click closer to the highlighted line."
-        )
-    else:
-        # Add position from offset
-        resolved["position"] = position_from_offset(
-            resolved["perpendicular_offset_m"]
-        )
-        st.session_state.ingest_picked_location = resolved
-        prev_pick = resolved
-
-# Show the resolved location
-if prev_pick:
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Tunnel", prev_pick["tunnel_label"])
-    with col2:
-        st.metric("Chainage", f"K{prev_pick['chainage_m']:.0f} m")
-    with col3:
-        st.metric("Ring", str(prev_pick["ring_id"]))
-    with col4:
-        st.metric("Offset from CL",
-                  f"{prev_pick['perpendicular_offset_m']:.0f} m")
-    if st.button("Clear picked location", type="secondary"):
-        st.session_state.ingest_picked_location = None
-        st.rerun()
-else:
-    st.info(
-        "No location picked yet. Click on the highlighted tunnel "
-        "alignment above to set chainage and ring ID automatically. "
-        "(You can still type them manually below if you prefer.)"
-    )
-
 st.divider()
 
 # -----------------------------------------------------------------------------
-# Input route selector
+# Input route + extraction method
 # -----------------------------------------------------------------------------
 input_route = st.radio(
     "Input source",
@@ -180,26 +105,69 @@ extraction_route = st.radio(
 
 st.divider()
 
-
 # -----------------------------------------------------------------------------
-# Helpers — common form rendering
+# Helpers — common rendering
 # -----------------------------------------------------------------------------
-def _resolve_default_ring(picked: Optional[Dict]) -> str:
-    return str(picked["ring_id"]) if picked else ""
+def _render_confirmation_map(
+    tunnel_id: str,
+    ring_id: str,
+    chainage_m: float,
+):
+    """Render the post-form confirmation map below the form."""
+    if chainage_m <= 0 and not ring_id:
+        st.info(
+            "Enter a chainage or ring ID above and a confirmation map "
+            "will appear here showing where the location projects to."
+        )
+        return
 
+    # Resolve chainage from ring if only ring is provided
+    effective_chainage = chainage_m
+    if effective_chainage <= 0 and ring_id:
+        try:
+            ring_int = int(ring_id)
+            ring_length = picked_tunnel.get("ring_length_m", 1.6)
+            effective_chainage = ring_int * ring_length
+        except (ValueError, TypeError):
+            pass
 
-def _resolve_default_chainage(picked: Optional[Dict]) -> float:
-    return float(picked["chainage_m"]) if picked else 0.0
+    if effective_chainage <= 0:
+        st.info(
+            "Could not resolve a chainage from the entered values. "
+            "Enter chainage in metres for a confirmation map."
+        )
+        return
 
+    # Sanity: warn if chainage is outside tunnel length
+    tunnel_length = picked_tunnel.get("length_m", 0)
+    if effective_chainage > tunnel_length:
+        st.warning(
+            f"⚠ Entered chainage K{effective_chainage:.0f}m exceeds "
+            f"{picked_tunnel['label']}'s length of {tunnel_length} m. "
+            f"The marker will be placed at the eastern portal — "
+            f"check your entered values."
+        )
 
-def _resolve_default_position(picked: Optional[Dict]) -> str:
-    if not picked:
-        return POSITION_OPTIONS[0]
-    pos = picked.get("position", "")
-    # Map gis.py positions to the more granular options in the form
-    if pos == "Crown":
-        return "Crown"
-    return POSITION_OPTIONS[0]
+    st.subheader("Confirmation — does this look right?")
+    st.caption(
+        f"Marker shows where Ring {ring_id or '—'} / "
+        f"K{effective_chainage:.0f}m projects on {picked_tunnel['label']}. "
+        f"If the marker isn't where the defect actually is, correct the "
+        f"values above before submitting."
+    )
+
+    confirm_map = build_confirmation_map(
+        tunnel_id=tunnel_id,
+        chainage_m=effective_chainage,
+        ring_id=ring_id if ring_id else None,
+        height=380,
+    )
+
+    # Render via folium's HTML so we don't need st_folium for this
+    # output-only map. Avoids re-render lag from click events that
+    # we don't need here.
+    from streamlit.components.v1 import html as components_html
+    components_html(confirm_map._repr_html_(), height=400)
 
 
 # -----------------------------------------------------------------------------
@@ -213,81 +181,89 @@ if input_route.startswith("Image"):
     )
 
     prefilled_defect_type = "Unclassified"
+
     if uploaded is not None:
-        st.image(uploaded, caption=uploaded.name, width=480)
+        # Show the image alongside the form
+        col_img, col_form = st.columns([1, 2])
+        with col_img:
+            st.image(uploaded, caption=uploaded.name, use_container_width=True)
 
         if extraction_route.startswith("Heuristic"):
             prefilled_defect_type = heuristic_defect_type_from_filename(
                 uploaded.name
             )
-            if prefilled_defect_type != "Unclassified":
-                st.info(
-                    f"Filename heuristic suggests **{prefilled_defect_type}** "
-                    f"(based on keyword in `{uploaded.name}`). Adjust below "
-                    f"if needed."
-                )
-            else:
-                st.warning(
-                    "No defect-type keyword found in filename. "
-                    "Please pick the type below."
-                )
-
-        with st.form("image_ingest_form"):
-            col1, col2 = st.columns(2)
-            with col1:
-                defect_type = st.selectbox(
-                    "Defect type",
-                    options=DEFECT_TYPE_OPTIONS,
-                    index=DEFECT_TYPE_OPTIONS.index(prefilled_defect_type)
-                    if prefilled_defect_type in DEFECT_TYPE_OPTIONS else 0,
-                )
-                ring_id = st.text_input(
-                    "Ring ID",
-                    value=_resolve_default_ring(prev_pick),
-                    help="Auto-filled from the map click. Override here if needed.",
-                )
-                chainage_m = st.number_input(
-                    "Chainage (m)",
-                    min_value=0.0, step=1.0,
-                    value=_resolve_default_chainage(prev_pick),
-                )
-            with col2:
-                position_default_idx = (
-                    POSITION_OPTIONS.index(_resolve_default_position(prev_pick))
-                    if _resolve_default_position(prev_pick) in POSITION_OPTIONS
-                    else 0
-                )
-                position = st.selectbox(
-                    "Position", options=POSITION_OPTIONS,
-                    index=position_default_idx,
-                )
-                priority = st.selectbox(
-                    "Priority", options=PRIORITY_OPTIONS, index=1
-                )
-                description = st.text_input(
-                    "Short description",
-                    value=f"{defect_type} observed in inspection photo"
-                    if defect_type else "",
-                )
-
-            with st.expander("Optional — quantitative measurements"):
-                colm1, colm2, colm3 = st.columns(3)
-                with colm1:
-                    crack_width = st.number_input(
-                        "Crack width (mm)", min_value=0.0, step=0.1, value=0.0
+            with col_form:
+                if prefilled_defect_type != "Unclassified":
+                    st.info(
+                        f"Filename heuristic suggests "
+                        f"**{prefilled_defect_type}** based on `{uploaded.name}`. "
+                        f"Adjust below if needed."
                     )
-                with colm2:
-                    spall_depth = st.number_input(
-                        "Spall depth (mm)", min_value=0.0, step=1.0, value=0.0
-                    )
-                with colm3:
-                    area_cm2 = st.number_input(
-                        "Affected area (cm²)", min_value=0.0, step=1.0, value=0.0
+                else:
+                    st.warning(
+                        "No defect-type keyword found in filename. "
+                        "Please pick the type below."
                     )
 
-            submitted = st.form_submit_button(
-                "Register defect", type="primary"
-            )
+        with col_form:
+            with st.form("image_ingest_form"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    defect_type = st.selectbox(
+                        "Defect type",
+                        options=DEFECT_TYPE_OPTIONS,
+                        index=DEFECT_TYPE_OPTIONS.index(prefilled_defect_type)
+                        if prefilled_defect_type in DEFECT_TYPE_OPTIONS else 0,
+                    )
+                    ring_id = st.text_input(
+                        "Ring ID",
+                        value="",
+                        help="Type the ring ID where the defect is. "
+                             "If you only know the chainage, leave this "
+                             "blank and fill chainage instead.",
+                    )
+                    chainage_m = st.number_input(
+                        "Chainage (m)",
+                        min_value=0.0, step=1.0, value=0.0,
+                        help="Distance along the tunnel from the western portal.",
+                    )
+                with col2:
+                    position = st.selectbox(
+                        "Position", options=POSITION_OPTIONS,
+                    )
+                    priority = st.selectbox(
+                        "Priority", options=PRIORITY_OPTIONS, index=1
+                    )
+                    description = st.text_input(
+                        "Short description",
+                        value=f"{defect_type} observed in inspection photo",
+                    )
+
+                with st.expander("Optional — quantitative measurements"):
+                    colm1, colm2, colm3 = st.columns(3)
+                    with colm1:
+                        crack_width = st.number_input(
+                            "Crack width (mm)", min_value=0.0, step=0.1, value=0.0
+                        )
+                    with colm2:
+                        spall_depth = st.number_input(
+                            "Spall depth (mm)", min_value=0.0, step=1.0, value=0.0
+                        )
+                    with colm3:
+                        area_cm2 = st.number_input(
+                            "Affected area (cm²)", min_value=0.0, step=1.0, value=0.0
+                        )
+
+                preview_clicked = st.form_submit_button(
+                    "Preview on map", help="Render the confirmation map below."
+                )
+                submitted = st.form_submit_button(
+                    "Register defect", type="primary"
+                )
+
+        # Confirmation map below the form (full width)
+        st.divider()
+        _render_confirmation_map(picked_tunnel_id, ring_id, chainage_m)
 
         if submitted:
             measurements: Dict = {}
@@ -320,7 +296,6 @@ if input_route.startswith("Image"):
                 source_kind="image",
                 measurements=measurements,
             )
-            # Tag with tunnel_id so map markers render correctly
             defect["tunnel_id"] = picked_tunnel_id
 
             st.session_state.ingested_defects.append(defect)
@@ -329,8 +304,8 @@ if input_route.startswith("Image"):
 
             st.success(
                 f"Registered **{new_id}** on **{picked_tunnel['label']}**. "
-                f"Open **Defect Detail** in the sidebar to view the FMEA "
-                f"chain and prescribed intervention."
+                f"Open **Defect Detail** in the sidebar for the FMEA chain, "
+                f"or **Defect Register** to see it on the overview map."
             )
 
 # -----------------------------------------------------------------------------
@@ -344,8 +319,8 @@ else:
 
     extracted_text = ""
     prefilled = {
-        "ring_id": _resolve_default_ring(prev_pick),
-        "chainage_m": _resolve_default_chainage(prev_pick),
+        "ring_id": "",
+        "chainage_m": 0.0,
         "crack_width_mm": 0.0,
         "spall_depth_mm": 0.0,
         "defect_type_guess": "Unclassified",
@@ -369,25 +344,8 @@ else:
 
             if extraction_route.startswith("Heuristic"):
                 heur = heuristic_fields_from_text(extracted_text)
-
-                # Cross-check: if both the map click and the regex found a
-                # ring, surface any disagreement.
-                heur_ring = heur["ring_id"]
-                map_ring = prev_pick["ring_id"] if prev_pick else None
-                if heur_ring and map_ring and str(heur_ring) != str(map_ring):
-                    st.warning(
-                        f"⚠ **Cross-check disagreement.** The text extractor "
-                        f"found Ring **{heur_ring}** in the report, but the "
-                        f"map click resolved to Ring **{map_ring}**. Pick "
-                        f"the correct value below before submitting — they "
-                        f"shouldn't disagree."
-                    )
-
-                # Map click takes precedence; regex fills only what's missing
-                if not prefilled["ring_id"] and heur_ring:
-                    prefilled["ring_id"] = heur_ring
-                if not prefilled["chainage_m"] and heur["chainage_m"]:
-                    prefilled["chainage_m"] = heur["chainage_m"]
+                prefilled["ring_id"] = heur["ring_id"] or ""
+                prefilled["chainage_m"] = heur["chainage_m"] or 0.0
                 prefilled["crack_width_mm"] = heur["crack_width_mm"] or 0.0
                 prefilled["spall_depth_mm"] = heur["spall_depth_mm"] or 0.0
                 if heur["defect_type_guess"]:
@@ -424,13 +382,6 @@ else:
             with col2:
                 position = st.selectbox(
                     "Position", options=POSITION_OPTIONS,
-                    index=(
-                        POSITION_OPTIONS.index(
-                            _resolve_default_position(prev_pick)
-                        )
-                        if _resolve_default_position(prev_pick) in POSITION_OPTIONS
-                        else 0
-                    ),
                 )
                 priority = st.selectbox(
                     "Priority", options=PRIORITY_OPTIONS, index=1
@@ -458,9 +409,16 @@ else:
                         value=0.0,
                     )
 
+            preview_clicked = st.form_submit_button(
+                "Preview on map", help="Render the confirmation map below."
+            )
             submitted = st.form_submit_button(
                 "Register defect", type="primary"
             )
+
+        # Confirmation map below the form
+        st.divider()
+        _render_confirmation_map(picked_tunnel_id, ring_id, chainage_m)
 
         if submitted:
             measurements = {}
@@ -501,8 +459,8 @@ else:
 
             st.success(
                 f"Registered **{new_id}** on **{picked_tunnel['label']}**. "
-                f"Open **Defect Detail** in the sidebar to view the FMEA "
-                f"chain and prescribed intervention."
+                f"Open **Defect Detail** in the sidebar for the FMEA chain, "
+                f"or **Defect Register** to see it on the overview map."
             )
 
 # -----------------------------------------------------------------------------
@@ -521,5 +479,6 @@ else:
         st.markdown(
             f"- **{d['defect_id']}** · {d['defect_type']} · "
             f"{d.get('tunnel_id', '?')} · Ring {d['ring_id']} · "
+            f"K{d.get('chainage_m', 0):.0f}m · "
             f"source: `{d['source_filename']}` ({d['source_kind']})"
         )

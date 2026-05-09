@@ -36,7 +36,8 @@ st.caption(
     "**Defect Detail** in the sidebar."
 )
 
-defects = st.session_state.defects
+defects = list(st.session_state.defects)  # copy so filters don't mutate state
+ingested_count = sum(1 for d in defects if d.get("ingested"))
 
 # -----------------------------------------------------------------------------
 # Filters
@@ -123,7 +124,10 @@ elif sort_by == "Date discovered":
 elif sort_by == "Evidence breadth":
     filtered.sort(key=lambda d: -d.get("completeness_score", 0))
 
-st.write(f"**{len(filtered)} defects** match current filters.")
+st.write(
+    f"**{len(filtered)} defects** match current filters."
+    + (f" · {ingested_count} ingested this session." if ingested_count else "")
+)
 
 # -----------------------------------------------------------------------------
 # Overview map
@@ -136,12 +140,21 @@ m = build_overview_map(
     selected_tunnel_id=selected_tunnel_for_map,
     height=420,
 )
+# Key the map so it rebuilds when defects are added/removed or filters
+# change — without this, st_folium returns the cached previous render
+# and newly-ingested defects appear to be missing.
+map_key = (
+    f"register_overview_map_"
+    f"{len(defects)}_{len(filtered)}_"
+    f"{'-'.join(tunnel_filter) or 'all'}_"
+    f"{'-'.join(priority_filter) or 'all'}"
+)
 map_state = st_folium(
     m,
     width=None,
     height=420,
     returned_objects=["last_object_clicked", "last_object_clicked_tooltip"],
-    key="register_overview_map",
+    key=map_key,
 )
 
 # If the user clicked a defect marker, capture the ID for Defect Detail
