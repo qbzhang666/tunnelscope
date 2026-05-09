@@ -1,0 +1,315 @@
+{
+  "_meta": {
+    "demonstration_data": true,
+    "disclaimer": "Synthetic data for research demonstration. Plausible attributes consistent with published precast-segmental-tunnel construction practice (ITA Working Group 2 guidelines, AFTES 2005, fib 2017) and the construction eras of the real-world tunnels these are anonymised from. Not Transurban or contractor records.",
+    "schema_version": "1.0",
+    "generated": "Rev 8"
+  },
+  "tunnels": {
+    "TUN-A": {
+      "tunnel_id": "TUN-A",
+      "label": "Tunnel A",
+      "construction_year_range": "2018-2024",
+      "ring_length_m": 1.6,
+      "lining_type": "Precast reinforced concrete segmental ring",
+      "internal_diameter_m": 14.0,
+      "lining_thickness_m": 0.5,
+      "segments_per_ring": 9,
+      "joint_type": "Bolted with EPDM gasket; secondary cast-in-place sealing strip",
+      "design_standards": ["AS 5100.5:2017", "AS 3600:2018", "fib Bulletin 83 (2017)"],
+      "default_contractor": "Contractor JV-Alpha",
+      "construction_segments": [
+        {
+          "segment_id": "TUN-A-S01",
+          "ring_range": [1, 60],
+          "chainage_range_m": [0, 96],
+          "name": "Western portal approach",
+          "construction_type": "Cut-and-cover",
+          "concrete_mix": {
+            "designation": "C50/60",
+            "compressive_strength_mpa": 60,
+            "cement_type": "GP (General Purpose Portland), Australian standard",
+            "aggregate_max_size_mm": 20,
+            "water_cement_ratio": 0.36,
+            "additives": ["silica fume 8%", "polycarboxylate superplasticiser"],
+            "exposure_class": "B2 (in-ground, aggressive)",
+            "cover_to_reinforcement_mm": 50
+          },
+          "reinforcement": {
+            "primary": "N20 @ 150 c/c (longitudinal)",
+            "secondary": "N16 @ 200 c/c (circumferential)",
+            "fibre_reinforced": false,
+            "epoxy_coated": true
+          },
+          "construction_dates": {"start": "2019-03-12", "completed": "2019-08-04"},
+          "contractor": "Contractor JV-Alpha",
+          "construction_notes": "Cut-and-cover above water table. Diaphragm wall support during excavation."
+        },
+        {
+          "segment_id": "TUN-A-S02",
+          "ring_range": [61, 350],
+          "chainage_range_m": [96, 560],
+          "name": "Western bored section",
+          "construction_type": "TBM-driven precast segmental",
+          "concrete_mix": {
+            "designation": "C50/60",
+            "compressive_strength_mpa": 60,
+            "cement_type": "GB (Blended) — 70% GP / 30% slag",
+            "aggregate_max_size_mm": 14,
+            "water_cement_ratio": 0.34,
+            "additives": ["silica fume 7%", "steel fibres 30 kg/m³", "polycarboxylate superplasticiser"],
+            "exposure_class": "B2",
+            "cover_to_reinforcement_mm": 45
+          },
+          "reinforcement": {
+            "primary": "N20 @ 150 c/c (longitudinal)",
+            "secondary": "N12 @ 150 c/c (circumferential, both faces)",
+            "fibre_reinforced": true,
+            "fibre_dosage_kg_m3": 30,
+            "epoxy_coated": false
+          },
+          "construction_dates": {"start": "2019-08-15", "completed": "2020-04-22"},
+          "contractor": "Contractor JV-Alpha",
+          "construction_notes": "TBM operating in mixed-face conditions (sand/clay/weathered basalt). Average advance 12 m/day. Grouting pressures 2.5–3.5 bar."
+        },
+        {
+          "segment_id": "TUN-A-S03",
+          "ring_range": [351, 950],
+          "chainage_range_m": [560, 1520],
+          "name": "Central deep section",
+          "construction_type": "TBM-driven precast segmental",
+          "concrete_mix": {
+            "designation": "C55/67",
+            "compressive_strength_mpa": 67,
+            "cement_type": "GB (Blended) — 60% GP / 40% slag",
+            "aggregate_max_size_mm": 14,
+            "water_cement_ratio": 0.32,
+            "additives": ["silica fume 8%", "steel fibres 35 kg/m³", "polycarboxylate superplasticiser"],
+            "exposure_class": "C (saline, in-ground, aggressive)",
+            "cover_to_reinforcement_mm": 50
+          },
+          "reinforcement": {
+            "primary": "N24 @ 150 c/c (longitudinal)",
+            "secondary": "N16 @ 150 c/c (circumferential, both faces)",
+            "fibre_reinforced": true,
+            "fibre_dosage_kg_m3": 35,
+            "epoxy_coated": true
+          },
+          "construction_dates": {"start": "2020-04-28", "completed": "2021-09-15"},
+          "contractor": "Contractor JV-Alpha",
+          "construction_notes": "Below water table along full length. Higher cover and corrosion protection specified due to saline groundwater. Annular grout to crown specified at 3–4 bar."
+        },
+        {
+          "segment_id": "TUN-A-S04",
+          "ring_range": [951, 1550],
+          "chainage_range_m": [1520, 2480],
+          "name": "Eastern bored section",
+          "construction_type": "TBM-driven precast segmental",
+          "concrete_mix": {
+            "designation": "C50/60",
+            "compressive_strength_mpa": 60,
+            "cement_type": "GB (Blended) — 70% GP / 30% slag",
+            "aggregate_max_size_mm": 14,
+            "water_cement_ratio": 0.34,
+            "additives": ["silica fume 7%", "steel fibres 30 kg/m³"],
+            "exposure_class": "B2",
+            "cover_to_reinforcement_mm": 45
+          },
+          "reinforcement": {
+            "primary": "N20 @ 150 c/c (longitudinal)",
+            "secondary": "N12 @ 150 c/c (circumferential, both faces)",
+            "fibre_reinforced": true,
+            "fibre_dosage_kg_m3": 30,
+            "epoxy_coated": false
+          },
+          "construction_dates": {"start": "2021-09-20", "completed": "2022-08-30"},
+          "contractor": "Contractor JV-Alpha",
+          "construction_notes": "TBM advance through silts and clays. Returning to mixed-face conditions toward portal."
+        },
+        {
+          "segment_id": "TUN-A-S05",
+          "ring_range": [1551, 1750],
+          "chainage_range_m": [2480, 2800],
+          "name": "Eastern portal approach",
+          "construction_type": "Cut-and-cover",
+          "concrete_mix": {
+            "designation": "C50/60",
+            "compressive_strength_mpa": 60,
+            "cement_type": "GP",
+            "aggregate_max_size_mm": 20,
+            "water_cement_ratio": 0.36,
+            "additives": ["silica fume 8%"],
+            "exposure_class": "B2",
+            "cover_to_reinforcement_mm": 50
+          },
+          "reinforcement": {
+            "primary": "N20 @ 150 c/c (longitudinal)",
+            "secondary": "N16 @ 200 c/c (circumferential)",
+            "fibre_reinforced": false,
+            "epoxy_coated": true
+          },
+          "construction_dates": {"start": "2022-09-05", "completed": "2023-02-28"},
+          "contractor": "Contractor JV-Alpha",
+          "construction_notes": "Eastern cut-and-cover. Transition zone to elevated structure."
+        }
+      ],
+      "repair_history": []
+    },
+    "TUN-B": {
+      "tunnel_id": "TUN-B",
+      "label": "Tunnel B",
+      "construction_year_range": "1996-2000",
+      "ring_length_m": 1.6,
+      "lining_type": "Precast reinforced concrete segmental ring (mid-1990s precast technology)",
+      "internal_diameter_m": 11.7,
+      "lining_thickness_m": 0.4,
+      "segments_per_ring": 7,
+      "joint_type": "Bolted with hydrophilic gasket (EPDM with bentonite swelling strip)",
+      "design_standards": ["AS 1480-1982 (era standard)", "AS 3600-1994", "ITA Guidelines 1988"],
+      "default_contractor": "Contractor JV-Beta",
+      "construction_segments": [
+        {
+          "segment_id": "TUN-B-S01",
+          "ring_range": [1, 280],
+          "chainage_range_m": [0, 448],
+          "name": "Western portal approach (Southbank)",
+          "construction_type": "Top-down cut-and-cover with secant pile walling",
+          "concrete_mix": {
+            "designation": "32 MPa (era nomenclature)",
+            "compressive_strength_mpa": 32,
+            "cement_type": "Type GP Portland",
+            "aggregate_max_size_mm": 20,
+            "water_cement_ratio": 0.42,
+            "additives": ["fly ash 15%", "lignosulfonate retarder"],
+            "exposure_class": "B1 (1990s era, in-ground)",
+            "cover_to_reinforcement_mm": 40
+          },
+          "reinforcement": {
+            "primary": "Y20 @ 200 c/c (longitudinal)",
+            "secondary": "Y12 @ 200 c/c (circumferential)",
+            "fibre_reinforced": false,
+            "epoxy_coated": false
+          },
+          "construction_dates": {"start": "1997-04-10", "completed": "1998-02-14"},
+          "contractor": "Contractor JV-Beta (Transfield-Obayashi)",
+          "construction_notes": "Top-down construction, secant pile walling on east bank. Working through Coode Island Silt and Port Melbourne Sand sequence."
+        },
+        {
+          "segment_id": "TUN-B-S02",
+          "ring_range": [281, 700],
+          "chainage_range_m": [448, 1120],
+          "name": "Yarra crossing approach",
+          "construction_type": "TBM-driven (roadheader-bored) precast segmental",
+          "concrete_mix": {
+            "designation": "40 MPa",
+            "compressive_strength_mpa": 40,
+            "cement_type": "Type GP Portland",
+            "aggregate_max_size_mm": 14,
+            "water_cement_ratio": 0.40,
+            "additives": ["fly ash 20%", "lignosulfonate retarder"],
+            "exposure_class": "B2",
+            "cover_to_reinforcement_mm": 40
+          },
+          "reinforcement": {
+            "primary": "Y20 @ 200 c/c (longitudinal)",
+            "secondary": "Y12 @ 200 c/c (circumferential)",
+            "fibre_reinforced": false,
+            "epoxy_coated": false
+          },
+          "construction_dates": {"start": "1998-02-20", "completed": "1998-11-08"},
+          "contractor": "Contractor JV-Beta",
+          "construction_notes": "Roadheader excavation through weathered basalt overlying mudstone. Approach to Yarra crossing — gasket sealing critical."
+        },
+        {
+          "segment_id": "TUN-B-S03",
+          "ring_range": [701, 1300],
+          "chainage_range_m": [1120, 2080],
+          "name": "Deep mudstone section (under Yarra)",
+          "construction_type": "TBM-driven precast segmental",
+          "concrete_mix": {
+            "designation": "50 MPa (uprated for high-pressure section)",
+            "compressive_strength_mpa": 50,
+            "cement_type": "Type SR (Sulphate-Resistant) — for hydrostatic exposure",
+            "aggregate_max_size_mm": 14,
+            "water_cement_ratio": 0.36,
+            "additives": ["silica fume 5%", "fly ash 15%", "naphthalene-based superplasticiser"],
+            "exposure_class": "C (high hydrostatic pressure, saline)",
+            "cover_to_reinforcement_mm": 50
+          },
+          "reinforcement": {
+            "primary": "Y24 @ 150 c/c (longitudinal)",
+            "secondary": "Y16 @ 150 c/c (circumferential)",
+            "fibre_reinforced": false,
+            "epoxy_coated": true
+          },
+          "construction_dates": {"start": "1998-11-15", "completed": "1999-09-22"},
+          "contractor": "Contractor JV-Beta",
+          "construction_notes": "Maximum depth ~65 m. Driven through Silurian mudstone (Melbourne Mudstone). Encountered unexpectedly high water pressures requiring grouting interventions during construction. Higher cover specified compared to other segments."
+        },
+        {
+          "segment_id": "TUN-B-S04",
+          "ring_range": [1301, 1850],
+          "chainage_range_m": [2080, 2960],
+          "name": "Eastern bored section (Richmond)",
+          "construction_type": "TBM-driven precast segmental",
+          "concrete_mix": {
+            "designation": "40 MPa",
+            "compressive_strength_mpa": 40,
+            "cement_type": "Type GP Portland",
+            "aggregate_max_size_mm": 14,
+            "water_cement_ratio": 0.40,
+            "additives": ["fly ash 20%"],
+            "exposure_class": "B2",
+            "cover_to_reinforcement_mm": 40
+          },
+          "reinforcement": {
+            "primary": "Y20 @ 200 c/c (longitudinal)",
+            "secondary": "Y12 @ 200 c/c (circumferential)",
+            "fibre_reinforced": false,
+            "epoxy_coated": false
+          },
+          "construction_dates": {"start": "1999-09-28", "completed": "2000-03-15"},
+          "contractor": "Contractor JV-Beta",
+          "construction_notes": "Mudstone with intermittent basalt intrusions. Standard ground conditions — design parameters returned to base specification."
+        },
+        {
+          "segment_id": "TUN-B-S05",
+          "ring_range": [1851, 2125],
+          "chainage_range_m": [2960, 3400],
+          "name": "Eastern portal approach (Burnley)",
+          "construction_type": "Top-down cut-and-cover",
+          "concrete_mix": {
+            "designation": "32 MPa",
+            "compressive_strength_mpa": 32,
+            "cement_type": "Type GP Portland",
+            "aggregate_max_size_mm": 20,
+            "water_cement_ratio": 0.42,
+            "additives": ["fly ash 15%"],
+            "exposure_class": "B1",
+            "cover_to_reinforcement_mm": 40
+          },
+          "reinforcement": {
+            "primary": "Y20 @ 200 c/c (longitudinal)",
+            "secondary": "Y12 @ 200 c/c (circumferential)",
+            "fibre_reinforced": false,
+            "epoxy_coated": false
+          },
+          "construction_dates": {"start": "2000-03-20", "completed": "2000-08-30"},
+          "contractor": "Contractor JV-Beta",
+          "construction_notes": "Eastern cut-and-cover. Above water table for most of length."
+        }
+      ],
+      "repair_history": [
+        {
+          "ring_id": 145,
+          "date": "2001-02-08",
+          "defect_type": "LeakingJoint",
+          "intervention": "Hydrophilic polyurethane grout injection at construction joint",
+          "contractor": "Specialist sub — Sealing Co",
+          "outcome": "Effective; re-inspected 2002-02 and 2007-03, no recurrence",
+          "reference": "Famous early-life event documented in industry literature for this tunnel class"
+        }
+      ]
+    }
+  }
+}

@@ -16,6 +16,14 @@ REVISED:
 - Single-modality input is a first-class case — full intervention shown
   with a LOW confidence label rather than a refusal.
 - Modality matrix has three states (present / could enhance / not applicable).
+
+REVISED (Rev 8):
+- BIM as-built context now embedded in the FMEA chain. A small
+  "BIM ✓" badge appears next to the Component step; full as-built
+  details (concrete mix, reinforcement, joint type, contractor,
+  construction notes, repair history) live in an expandable section
+  immediately under the Component row. The chain stays readable;
+  the data is one click away.
 """
 
 import streamlit as st
@@ -29,6 +37,7 @@ from utils.fmea_chain import (
     compute_completeness, recommend_missing_modality, confidence_tier,
     modality_state, MODALITY_LEVELS,
 )
+from utils.bim import get_bim_context
 from utils.styling import apply_custom_css
 
 st.set_page_config(page_title="Defect Detail", layout="wide")
@@ -320,11 +329,27 @@ with col2:
 st.divider()
 st.subheader("FMEA reasoning chain")
 
+# Resolve BIM context once. Drives both the inline badge on the Component
+# step and the expandable as-built section.
+bim_context = get_bim_context(defect)
+bim_segment = bim_context["segment"]
+bim_tunnel = bim_context["tunnel"]
+bim_repairs = bim_context["repairs"]
+
 chain_data = defect.get("fmea_chain", [])
 if not chain_data:
+    # Build the Component step's value so it includes segment-aware text
+    component_value = f"Concrete lining at Ring {defect['ring_id']}"
+    if bim_segment:
+        component_value += (
+            f" — within construction segment "
+            f"**{bim_segment['segment_id']}** "
+            f"({bim_segment.get('name', '—')})"
+        )
+
     chain_data = [
         {"step": "1. Component",
-         "value": f"Concrete lining at Ring {defect['ring_id']}",
+         "value": component_value,
          "source": f"COBie.Component.ComponentName = \"Ring_{defect['ring_id']}\""},
         {"step": "2. Failure mechanism",
          "value": defect.get("failure_mechanism", "Not classified"),
@@ -346,6 +371,152 @@ if not chain_data:
                               "AASHTO Manual for Bridge Element Inspection")},
     ]
 
+
+def _render_bim_inline_badge():
+    """A small inline badge after the Component step's value text."""
+    if bim_segment is not None:
+        st.caption(
+            f"🧱 **BIM ✓** — as-built record found for segment "
+            f"`{bim_segment['segment_id']}`. See **As-built details** "
+            f"below for concrete mix, reinforcement, contractor, "
+            f"construction notes, and repair history."
+        )
+    elif bim_tunnel is not None:
+        # Tunnel known, but the ring is out of segment range
+        st.caption(
+            f"🧱 **BIM ⚠** — tunnel record found, but Ring "
+            f"{defect.get('ring_id', '?')} is outside the defined "
+            f"segment ranges. Check the ring number is correct."
+        )
+    else:
+        # No tunnel_id on the defect (legacy) or tunnel not in BIM file
+        st.caption(
+            f"🧱 **BIM —** — no as-built record linked to this defect. "
+            f"Defect predates the BIM extension or has no tunnel_id."
+        )
+
+
+def _render_bim_expandable():
+    """
+    The full as-built section. Renders ONLY when there's a segment to
+    show, immediately after the Component row. Skipped silently when
+    no segment matches — the inline badge already explains why.
+    """
+    if bim_segment is None or bim_tunnel is None:
+        return
+
+    expander_label = (
+        f"📋 As-built details — segment {bim_segment['segment_id']} "
+        f"({bim_segment.get('name', '—')})"
+    )
+    with st.expander(expander_label, expanded=False):
+        if bim_context.get("is_demo_data"):
+            st.caption(
+                "⚠ Demonstration data — not contractor or owner records. "
+                "Synthetic attributes consistent with published "
+                "precast-segmental-tunnel construction practice "
+                "(ITA WG2, AFTES, fib) and the construction era of the "
+                "real tunnel this is anonymised from."
+            )
+
+        # ---- Construction summary ----
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.markdown("**Construction**")
+            st.markdown(
+                f"- Type: {bim_segment.get('construction_type', '—')}\n"
+                f"- Started: {bim_segment.get('construction_dates', {}).get('start', '—')}\n"
+                f"- Completed: {bim_segment.get('construction_dates', {}).get('completed', '—')}\n"
+                f"- Contractor: {bim_segment.get('contractor', '—')}\n"
+                f"- Ring range: {bim_segment.get('ring_range', ['?', '?'])[0]}"
+                f" – {bim_segment.get('ring_range', ['?', '?'])[1]}\n"
+                f"- Chainage range: K{bim_segment.get('chainage_range_m', [0, 0])[0]:.0f}m"
+                f" – K{bim_segment.get('chainage_range_m', [0, 0])[1]:.0f}m"
+            )
+        with col_b:
+            st.markdown("**Tunnel-level**")
+            st.markdown(
+                f"- Internal diameter: {bim_tunnel.get('internal_diameter_m', '—')} m\n"
+                f"- Lining thickness: {bim_tunnel.get('lining_thickness_m', '—')} m\n"
+                f"- Segments per ring: {bim_tunnel.get('segments_per_ring', '—')}\n"
+                f"- Ring length: {bim_tunnel.get('ring_length_m', '—')} m\n"
+                f"- Joint type: {bim_tunnel.get('joint_type', '—')}\n"
+                f"- Lining type: {bim_tunnel.get('lining_type', '—')}"
+            )
+
+        # ---- Concrete mix ----
+        st.markdown("**Concrete mix design**")
+        mix = bim_segment.get("concrete_mix", {})
+        if mix:
+            additives = mix.get("additives", [])
+            additives_str = "; ".join(additives) if additives else "—"
+            st.markdown(
+                f"- Designation: **{mix.get('designation', '—')}** "
+                f"({mix.get('compressive_strength_mpa', '—')} MPa)\n"
+                f"- Cement: {mix.get('cement_type', '—')}\n"
+                f"- W/C ratio: {mix.get('water_cement_ratio', '—')}\n"
+                f"- Aggregate max size: {mix.get('aggregate_max_size_mm', '—')} mm\n"
+                f"- Additives: {additives_str}\n"
+                f"- Exposure class: {mix.get('exposure_class', '—')}\n"
+                f"- Cover to reinforcement: "
+                f"{mix.get('cover_to_reinforcement_mm', '—')} mm"
+            )
+        else:
+            st.markdown(":grey[No mix design record.]")
+
+        # ---- Reinforcement ----
+        st.markdown("**Reinforcement**")
+        reo = bim_segment.get("reinforcement", {})
+        if reo:
+            fibre_line = (
+                f"- Steel fibres: {reo.get('fibre_dosage_kg_m3', '—')} kg/m³"
+                if reo.get("fibre_reinforced") else "- Steel fibres: none"
+            )
+            st.markdown(
+                f"- Primary: {reo.get('primary', '—')}\n"
+                f"- Secondary: {reo.get('secondary', '—')}\n"
+                f"{fibre_line}\n"
+                f"- Epoxy-coated: "
+                f"{'yes' if reo.get('epoxy_coated') else 'no'}"
+            )
+        else:
+            st.markdown(":grey[No reinforcement record.]")
+
+        # ---- Construction notes ----
+        notes = bim_segment.get("construction_notes")
+        if notes:
+            st.markdown("**Construction notes**")
+            st.info(notes)
+
+        # ---- Design standards & repair history ----
+        st.markdown("**Design standards (era)**")
+        standards = bim_tunnel.get("design_standards", [])
+        if standards:
+            st.markdown(
+                "\n".join(f"- {s}" for s in standards)
+            )
+
+        if bim_repairs:
+            st.markdown(f"**Repair history near Ring {defect['ring_id']}** "
+                        f"(within ±5 rings)")
+            for rep in bim_repairs:
+                st.markdown(
+                    f"- **Ring {rep.get('ring_id', '?')}** · "
+                    f"{rep.get('date', '?')} · "
+                    f"{rep.get('defect_type', '?')} → "
+                    f"{rep.get('intervention', '?')}"
+                )
+                if rep.get("outcome"):
+                    st.caption(f"  Outcome: {rep['outcome']}")
+        else:
+            st.markdown(
+                f":grey[No repair history recorded within ±5 rings of "
+                f"Ring {defect.get('ring_id', '?')}.]"
+            )
+
+
+# Render the chain. After the Component row (step 1), inject the
+# inline badge and the expandable as-built section.
 for step in chain_data:
     with st.container():
         col1, col2 = st.columns([1, 4])
@@ -355,6 +526,13 @@ for step in chain_data:
             st.write(step["value"])
             if step.get("source"):
                 st.code(step["source"], language=None)
+            # Inline BIM badge attached to Component step
+            if step["step"].startswith("1.") or "Component" in step["step"]:
+                _render_bim_inline_badge()
+
+    # Expandable BIM section directly after Component row
+    if step["step"].startswith("1.") or "Component" in step["step"]:
+        _render_bim_expandable()
 
 # -----------------------------------------------------------------------------
 # Prescribed intervention — ALWAYS shown
