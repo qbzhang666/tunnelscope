@@ -52,6 +52,23 @@ st.caption(
 )
 
 # -----------------------------------------------------------------------------
+# Session counter — visible reminder of what's been registered already,
+# helps prevent the accidental-double-click problem
+# -----------------------------------------------------------------------------
+_ingested = st.session_state.get("ingested_defects", [])
+if _ingested:
+    _latest = _ingested[-3:]
+    _latest_summary = ", ".join(
+        f"`{d['defect_id']}`" for d in reversed(_latest)
+    )
+    st.success(
+        f"📋 **Defects already registered this session: {len(_ingested)}** — "
+        f"latest: {_latest_summary}. "
+        f"If your most recent submission appears here, the registration "
+        f"succeeded — no need to click 'Register defect' again."
+    )
+
+# -----------------------------------------------------------------------------
 # Tunnel selector
 # -----------------------------------------------------------------------------
 tunnels = list_tunnels()
@@ -108,6 +125,32 @@ st.divider()
 # -----------------------------------------------------------------------------
 # Helpers — common rendering
 # -----------------------------------------------------------------------------
+def _is_likely_duplicate(
+    tunnel_id: str,
+    defect_type: str,
+    ring_id: str,
+    chainage_m: float,
+    source_filename: str,
+) -> bool:
+    """
+    Detect if the same defect was just registered. Looks at the most
+    recently-ingested defect this session and compares the salient
+    fields. If they all match, the operator probably double-clicked
+    Register and we should refuse the second submission.
+    """
+    recent = st.session_state.get("ingested_defects", [])
+    if not recent:
+        return False
+    last = recent[-1]
+    return all([
+        last.get("tunnel_id") == tunnel_id,
+        last.get("defect_type") == defect_type,
+        str(last.get("ring_id", "")) == str(ring_id),
+        abs(float(last.get("chainage_m", 0)) - float(chainage_m)) < 0.5,
+        last.get("source_filename") == source_filename,
+    ])
+
+
 def _render_confirmation_map(
     tunnel_id: str,
     ring_id: str,
@@ -266,6 +309,26 @@ if input_route.startswith("Image"):
         _render_confirmation_map(picked_tunnel_id, ring_id, chainage_m)
 
         if submitted:
+            # Duplicate-click guard — refuse if the same fields were
+            # just submitted (catches the accidental-double-click case).
+            if _is_likely_duplicate(
+                tunnel_id=picked_tunnel_id,
+                defect_type=defect_type,
+                ring_id=ring_id,
+                chainage_m=chainage_m,
+                source_filename=uploaded.name,
+            ):
+                last_id = st.session_state.ingested_defects[-1]["defect_id"]
+                st.warning(
+                    f"⚠ This looks like a duplicate of "
+                    f"**{last_id}** that was just registered "
+                    f"({uploaded.name} · Ring {ring_id} · K{chainage_m:.0f}m). "
+                    f"If you really want to register this as a separate "
+                    f"defect, change at least one field (ring, chainage, "
+                    f"description, etc.) before clicking Register again."
+                )
+                st.stop()
+
             measurements: Dict = {}
             if crack_width > 0:
                 measurements["crack_width_mm"] = crack_width
@@ -421,6 +484,25 @@ else:
         _render_confirmation_map(picked_tunnel_id, ring_id, chainage_m)
 
         if submitted:
+            # Duplicate-click guard — same logic as the image route.
+            if _is_likely_duplicate(
+                tunnel_id=picked_tunnel_id,
+                defect_type=defect_type,
+                ring_id=ring_id,
+                chainage_m=chainage_m,
+                source_filename=uploaded.name,
+            ):
+                last_id = st.session_state.ingested_defects[-1]["defect_id"]
+                st.warning(
+                    f"⚠ This looks like a duplicate of "
+                    f"**{last_id}** that was just registered "
+                    f"({uploaded.name} · Ring {ring_id} · K{chainage_m:.0f}m). "
+                    f"If you really want to register this as a separate "
+                    f"defect, change at least one field (ring, chainage, "
+                    f"description, etc.) before clicking Register again."
+                )
+                st.stop()
+
             measurements = {}
             if crack_width > 0:
                 measurements["crack_width_mm"] = crack_width

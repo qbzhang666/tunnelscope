@@ -30,10 +30,10 @@ if "graph" not in st.session_state:
 
 st.title("Defect register")
 st.caption(
-    "All detected defects across the active tunnel network. The map "
-    "and table stay in sync — filters affect both. Click a marker on "
-    "the map or a row in the table to select a defect, then open "
-    "**Defect Detail** in the sidebar."
+    "All detected defects across the active tunnel network. **Filters** "
+    "(below) drive both the map markers and the table contents. **Row "
+    "selection** (the checkboxes in the table) is for actions — pick "
+    "one row to navigate to Defect Detail, or several to bulk-delete."
 )
 
 defects = list(st.session_state.defects)  # copy so filters don't mutate state
@@ -207,12 +207,14 @@ if filtered:
 
     df = pd.DataFrame(table_data)
 
+    # Multi-row selection enables both navigation (single tick → set
+    # selected_defect_id) and bulk deletion (multiple ticks → delete).
     event = st.dataframe(
         df,
         use_container_width=True,
         hide_index=True,
         on_select="rerun",
-        selection_mode="single-row",
+        selection_mode="multi-row",
         column_config={
             "ID": st.column_config.TextColumn(width="small"),
             "Tunnel": st.column_config.TextColumn(width="small"),
@@ -223,15 +225,91 @@ if filtered:
         },
     )
 
-    if event.selection.rows:
-        selected_idx = event.selection.rows[0]
-        selected_defect = filtered[selected_idx]
-        st.session_state.selected_defect_id = selected_defect["defect_id"]
-        st.info(
-            f"Selected **{selected_defect['defect_id']}** from the table — "
-            f"open the **Defect Detail** page in the sidebar to view "
-            f"the full FMEA chain."
-        )
+    selected_rows = event.selection.rows if event.selection else []
+    selected_defects = [filtered[i] for i in selected_rows]
+    selected_ids = [d["defect_id"] for d in selected_defects]
+
+    # ---- Selection summary + actions ----
+    if selected_defects:
+        if len(selected_defects) == 1:
+            d = selected_defects[0]
+            st.session_state.selected_defect_id = d["defect_id"]
+            st.info(
+                f"Selected **{d['defect_id']}** — open **Defect Detail** "
+                f"in the sidebar to view the full FMEA chain, or use the "
+                f"actions below."
+            )
+        else:
+            st.info(
+                f"**{len(selected_defects)} defects selected** "
+                f"({', '.join(selected_ids[:5])}"
+                f"{'…' if len(selected_ids) > 5 else ''}). "
+                f"Selecting multiple rows is for bulk actions like "
+                f"deletion or export — Defect Detail uses only the first."
+            )
+
+        # ---- Delete UX with mandatory confirmation ----
+        with st.container(border=True):
+            st.markdown("**Delete selected defects**")
+
+            # Show breakdown so the operator sees what they're about to delete
+            ingested_to_del = [d for d in selected_defects if d.get("ingested")]
+            ontology_to_del = [d for d in selected_defects if not d.get("ingested")]
+
+            if ingested_to_del:
+                st.markdown(
+                    f"- **{len(ingested_to_del)} ingested** (this session): "
+                    f"{', '.join(d['defect_id'] for d in ingested_to_del[:5])}"
+                    f"{'…' if len(ingested_to_del) > 5 else ''}"
+                )
+            if ontology_to_del:
+                st.warning(
+                    f"⚠️ **{len(ontology_to_del)} from the ontology / "
+                    f"sample data:** "
+                    f"{', '.join(d['defect_id'] for d in ontology_to_del[:5])}"
+                    f"{'…' if len(ontology_to_del) > 5 else ''}. "
+                    f"These are demo defects — deleting them only removes "
+                    f"them from this session, not from the JSON file. "
+                    f"They will reappear after a server reboot."
+                )
+
+            confirm = st.checkbox(
+                f"I confirm I want to delete these "
+                f"{len(selected_defects)} defect(s)",
+                key="delete_confirm_checkbox",
+            )
+            delete_clicked = st.button(
+                "Delete selected",
+                type="primary",
+                disabled=not confirm,
+                key="delete_button",
+            )
+
+            if delete_clicked and confirm:
+                ids_to_delete = set(selected_ids)
+
+                # Remove from session-state defects (the merged list)
+                st.session_state.defects = [
+                    d for d in st.session_state.defects
+                    if d["defect_id"] not in ids_to_delete
+                ]
+                # Remove from ingested-this-session list (so the Ingest
+                # page counter and "registered this session" panel
+                # also update)
+                st.session_state.ingested_defects = [
+                    d for d in st.session_state.get("ingested_defects", [])
+                    if d["defect_id"] not in ids_to_delete
+                ]
+                # Clear selected_defect_id if it was one of the deleted
+                if st.session_state.get("selected_defect_id") in ids_to_delete:
+                    st.session_state.selected_defect_id = None
+
+                st.success(
+                    f"Deleted **{len(ids_to_delete)} defect(s)**: "
+                    f"{', '.join(sorted(ids_to_delete))}"
+                )
+                # Force a fresh render so the table and map drop the rows
+                st.rerun()
 else:
     st.info("No defects match the current filters.")
 
