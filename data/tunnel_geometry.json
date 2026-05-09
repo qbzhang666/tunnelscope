@@ -1,0 +1,70 @@
+{
+  "tunnels": [
+    {
+      "tunnel_id": "TUN-A",
+      "label": "Tunnel A",
+      "real_name": "West Gate Tunnel — Bundawanh (eastbound)",
+      "anonymised": true,
+      "length_m": 2800,
+      "rings_total": 1750,
+      "ring_length_m": 1.6,
+      "max_depth_m": 30,
+      "comment": "Anonymised. Real corridor: Yarraville (Williamstown Rd portal) → Maribyrnong River exit → emerges near Footscray Rd. Coordinates approximate, traced from public scope map.",
+      "alignment": [
+        [-37.8278, 144.8780],
+        [-37.8270, 144.8815],
+        [-37.8262, 144.8850],
+        [-37.8254, 144.8885],
+        [-37.8245, 144.8918],
+        [-37.8235, 144.8950],
+        [-37.8223, 144.8980],
+        [-37.8210, 144.9008],
+        [-37.8195, 144.9032],
+        [-37.8180, 144.9054],
+        [-37.8166, 144.9072],
+        [-37.8155, 144.9088]
+      ],
+      "portals": {
+        "west": {"coords": [-37.8278, 144.8780], "label": "Western portal (near Williamstown Rd)"},
+        "east": {"coords": [-37.8155, 144.9088], "label": "Eastern portal (Maribyrnong River side)"}
+      }
+    },
+    {
+      "tunnel_id": "TUN-B",
+      "label": "Tunnel B",
+      "real_name": "Burnley Tunnel (CityLink, eastbound)",
+      "anonymised": true,
+      "length_m": 3400,
+      "rings_total": 2125,
+      "ring_length_m": 1.6,
+      "max_depth_m": 65,
+      "comment": "Anonymised. Real corridor: Southbank → under Yarra at maximum depth ~65 m → Richmond → Burnley portal. Coordinates approximate from published geological cross-sections (Holdgate et al., Cupper et al.).",
+      "alignment": [
+        [-37.8230, 144.9560],
+        [-37.8238, 144.9595],
+        [-37.8245, 144.9630],
+        [-37.8248, 144.9665],
+        [-37.8246, 144.9700],
+        [-37.8240, 144.9735],
+        [-37.8232, 144.9768],
+        [-37.8222, 144.9800],
+        [-37.8214, 144.9832],
+        [-37.8210, 144.9862],
+        [-37.8212, 144.9892],
+        [-37.8220, 144.9920]
+      ],
+      "portals": {
+        "west": {"coords": [-37.8230, 144.9560], "label": "Western portal (Southbank)"},
+        "east": {"coords": [-37.8220, 144.9920], "label": "Eastern portal (Burnley)"}
+      },
+      "river_crossings": [
+        {
+          "name": "Yarra River crossing",
+          "approx_chainage_m": 700,
+          "approx_coords": [-37.8245, 144.9630]
+        }
+      ],
+      "geological_notes": "Deeper sections through Silurian mudstone (Melbourne Mudstone). Shallower sections pass through silts, sands, clay, and basalt. Yarra Delta sequence (Coode Island Silt, Port Melbourne Sand) at shallower depths."
+    }
+  ]
+}

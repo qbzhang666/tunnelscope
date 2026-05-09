@@ -2,23 +2,24 @@
 Defect Register — page 1
 ========================
 
-Ranked list of all defects in the active tunnel, with filtering by
-priority, type, and evidence breadth. Clicking a defect navigates to the
-Defect Detail page.
+Ranked list of all defects in the active tunnel network, with a
+geographic overview map and filters by priority, type, and source.
 
-REVISED:
-- width='stretch' replaced with use_container_width=True (compatibility
-  with Streamlit < 1.49 on Cloud).
-- New "Evidence" column shows how many of the four modalities have data,
-  framed neutrally rather than as a deficiency score.
-- Defects ingested via the Ingest page are merged into the listing.
+REVISED (Rev 6):
+- Overview map at the top — both tunnels rendered, defect markers
+  coloured by priority. Tunnel and table stay in sync via the same
+  filter controls.
+- Click a marker on the map → defect ID is captured for the Defect
+  Detail page navigation.
 """
 
 import streamlit as st
 import pandas as pd
+from streamlit_folium import st_folium
 
 from utils.ontology_loader import load_ontology, load_defects
 from utils.styling import apply_custom_css
+from utils.gis import build_overview_map, list_tunnels
 
 st.set_page_config(page_title="Defect Register", layout="wide")
 apply_custom_css()
@@ -29,9 +30,10 @@ if "graph" not in st.session_state:
 
 st.title("Defect register")
 st.caption(
-    "All detected defects across the active tunnel. Filter and sort, "
-    "then click a row to select. Evidence breadth (how many modalities "
-    "informed the record) is shown but does not gate intervention."
+    "All detected defects across the active tunnel network. The map "
+    "and table stay in sync — filters affect both. Click a marker on "
+    "the map or a row in the table to select a defect, then open "
+    "**Defect Detail** in the sidebar."
 )
 
 defects = st.session_state.defects
@@ -39,8 +41,11 @@ defects = st.session_state.defects
 # -----------------------------------------------------------------------------
 # Filters
 # -----------------------------------------------------------------------------
+tunnels = list_tunnels()
+tunnel_id_to_label = {t["tunnel_id"]: t["label"] for t in tunnels}
+
 with st.expander("Filters", expanded=True):
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
 
     with col1:
         type_filter = st.multiselect(
@@ -55,14 +60,19 @@ with st.expander("Filters", expanded=True):
             default=[],
         )
     with col3:
+        tunnel_filter = st.multiselect(
+            "Tunnel",
+            options=[t["tunnel_id"] for t in tunnels],
+            format_func=lambda x: tunnel_id_to_label.get(x, x),
+            default=[],
+        )
+    with col4:
         source_filter = st.multiselect(
             "Source",
             options=["Ontology", "Ingested (this session)"],
             default=[],
-            help="Filter by whether a defect came from the ontology or "
-                 "was uploaded on the Ingest page.",
         )
-    with col4:
+    with col5:
         sort_by = st.selectbox(
             "Sort by",
             options=["Priority", "Chainage", "Cost (high-low)",
@@ -82,11 +92,18 @@ def _passes_source_filter(defect):
     return False
 
 
+def _passes_tunnel_filter(defect):
+    if not tunnel_filter:
+        return True
+    return defect.get("tunnel_id") in tunnel_filter
+
+
 filtered = [
     d for d in defects
     if (not type_filter or d["defect_type"] in type_filter)
     and (not priority_filter or d.get("priority") in priority_filter)
     and _passes_source_filter(d)
+    and _passes_tunnel_filter(d)
 ]
 
 if sort_by == "Priority":
@@ -109,8 +126,40 @@ elif sort_by == "Evidence breadth":
 st.write(f"**{len(filtered)} defects** match current filters.")
 
 # -----------------------------------------------------------------------------
+# Overview map
+# -----------------------------------------------------------------------------
+st.subheader("Geographic overview")
+
+selected_tunnel_for_map = tunnel_filter[0] if len(tunnel_filter) == 1 else None
+m = build_overview_map(
+    filtered,
+    selected_tunnel_id=selected_tunnel_for_map,
+    height=420,
+)
+map_state = st_folium(
+    m,
+    width=None,
+    height=420,
+    returned_objects=["last_object_clicked", "last_object_clicked_tooltip"],
+    key="register_overview_map",
+)
+
+# If the user clicked a defect marker, capture the ID for Defect Detail
+clicked_tooltip = map_state.get("last_object_clicked_tooltip") if map_state else None
+if clicked_tooltip and clicked_tooltip in {d["defect_id"] for d in filtered}:
+    st.session_state.selected_defect_id = clicked_tooltip
+    st.info(
+        f"Selected **{clicked_tooltip}** from the map — open the "
+        f"**Defect Detail** page in the sidebar to view the FMEA chain."
+    )
+
+st.divider()
+
+# -----------------------------------------------------------------------------
 # Defect table
 # -----------------------------------------------------------------------------
+st.subheader("Defect list")
+
 if filtered:
     table_data = []
     for d in filtered:
@@ -125,9 +174,11 @@ if filtered:
         cost_str = f"${cost:,}" if cost else "pending"
 
         source = "Ingested" if d.get("ingested") else "Ontology"
+        tunnel_label = tunnel_id_to_label.get(d.get("tunnel_id"), "—")
 
         table_data.append({
             "ID": d["defect_id"],
+            "Tunnel": tunnel_label,
             "Description": d["description"],
             "Location": (
                 f"Ring {d['ring_id']} · "
@@ -151,6 +202,7 @@ if filtered:
         selection_mode="single-row",
         column_config={
             "ID": st.column_config.TextColumn(width="small"),
+            "Tunnel": st.column_config.TextColumn(width="small"),
             "Priority": st.column_config.TextColumn(width="small"),
             "Evidence": st.column_config.TextColumn(width="small"),
             "Source": st.column_config.TextColumn(width="small"),
@@ -163,7 +215,7 @@ if filtered:
         selected_defect = filtered[selected_idx]
         st.session_state.selected_defect_id = selected_defect["defect_id"]
         st.info(
-            f"Selected **{selected_defect['defect_id']}** — "
+            f"Selected **{selected_defect['defect_id']}** from the table — "
             f"open the **Defect Detail** page in the sidebar to view "
             f"the full FMEA chain."
         )

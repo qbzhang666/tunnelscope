@@ -288,6 +288,14 @@ def load_defects(_graph: Graph) -> List[Dict[str, Any]]:
         except Exception:
             json_defects = []
 
+    # Default-assign tunnel_id for back-compat with pre-Rev-6 JSON files
+    # that pre-date the GIS extension. The "_tunnel_a" filename suggests
+    # all sample defects belong to Tunnel A; if a defect already has an
+    # explicit tunnel_id, that's preserved.
+    for d in json_defects:
+        if "tunnel_id" not in d:
+            d["tunnel_id"] = "TUN-A"
+
     # Merge: prefer JSON dict (richer fields) when IDs match;
     # include SPARQL-only IDs that aren't in the JSON.
     json_by_id = {d.get("defect_id"): d for d in json_defects
