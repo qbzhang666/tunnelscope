@@ -5,13 +5,21 @@ Defect Register — page 1
 Ranked list of all defects in the active tunnel network, with a
 geographic overview map and filters by priority, type, and source.
 
-REVISED (Rev 6):
-- Overview map at the top — both tunnels rendered, defect markers
-  coloured by priority. Tunnel and table stay in sync via the same
-  filter controls.
-- Click a marker on the map → defect ID is captured for the Defect
-  Detail page navigation.
+REVISED (Rev 6d):
+- Switched from st.dataframe row selection to st.data_editor with a
+  leading Select checkbox column. This enables a true "Select all
+  visible" toggle, which the dataframe widget can't support.
+- Selection now drives DOWNLOADS, not deletion. Buttons rename to
+  "Download selected (N)" with a fallback of "Download all filtered"
+  when nothing is ticked.
+- Deletion is moved into a small popover at the bottom of the page
+  with an @st.dialog confirmation. No more bordered panel
+  intruding on the main flow.
+- Filters → drive map markers AND table contents (visibility).
+- Selection → drives actions (download, delete). Independent of map.
 """
+
+import json
 
 import streamlit as st
 import pandas as pd
@@ -28,15 +36,23 @@ if "graph" not in st.session_state:
     st.session_state.graph = load_ontology()
     st.session_state.defects = load_defects(st.session_state.graph)
 
+# Versioning key so we can force the editor to remount after deletes.
+# Without this, the data_editor would hold onto stale row keys and
+# show ghost selections.
+if "register_editor_version" not in st.session_state:
+    st.session_state.register_editor_version = 0
+
+
 st.title("Defect register")
 st.caption(
     "All detected defects across the active tunnel network. **Filters** "
     "(below) drive both the map markers and the table contents. **Row "
-    "selection** (the checkboxes in the table) is for actions — pick "
-    "one row to navigate to Defect Detail, or several to bulk-delete."
+    "selection** (the checkboxes in the table's first column) is for "
+    "actions — primarily downloading the selected subset. A subtle "
+    "delete option is available at the bottom of the page."
 )
 
-defects = list(st.session_state.defects)  # copy so filters don't mutate state
+defects = list(st.session_state.defects)
 ingested_count = sum(1 for d in defects if d.get("ingested"))
 
 # -----------------------------------------------------------------------------
@@ -130,7 +146,7 @@ st.write(
 )
 
 # -----------------------------------------------------------------------------
-# Overview map
+# Overview map (driven by filters)
 # -----------------------------------------------------------------------------
 st.subheader("Geographic overview")
 
@@ -140,9 +156,6 @@ m = build_overview_map(
     selected_tunnel_id=selected_tunnel_for_map,
     height=420,
 )
-# Key the map so it rebuilds when defects are added/removed or filters
-# change — without this, st_folium returns the cached previous render
-# and newly-ingested defects appear to be missing.
 map_key = (
     f"register_overview_map_"
     f"{len(defects)}_{len(filtered)}_"
@@ -157,7 +170,6 @@ map_state = st_folium(
     key=map_key,
 )
 
-# If the user clicked a defect marker, capture the ID for Defect Detail
 clicked_tooltip = map_state.get("last_object_clicked_tooltip") if map_state else None
 if clicked_tooltip and clicked_tooltip in {d["defect_id"] for d in filtered}:
     st.session_state.selected_defect_id = clicked_tooltip
@@ -169,17 +181,38 @@ if clicked_tooltip and clicked_tooltip in {d["defect_id"] for d in filtered}:
 st.divider()
 
 # -----------------------------------------------------------------------------
-# Defect table
+# Defect table — st.data_editor with controllable Select column
 # -----------------------------------------------------------------------------
 st.subheader("Defect list")
 
-if filtered:
+# Initialize selected_defects/selected_ids as empty so they always exist
+selected_defects: list = []
+selected_ids: list = []
+
+if not filtered:
+    st.info("No defects match the current filters.")
+else:
+    # ---- Select-all toggle (state owned by us, not the editor) ----
+    select_all_key = (
+        f"register_select_all_v{st.session_state.register_editor_version}"
+    )
+    if select_all_key not in st.session_state:
+        st.session_state[select_all_key] = False
+
+    select_all = st.checkbox(
+        f"Select all {len(filtered)} visible",
+        key=select_all_key,
+        help="Tick to select every visible row for download or deletion. "
+             "Untick to clear all selections.",
+    )
+
+    # ---- Build the editable dataframe with a leading Select column ----
     table_data = []
     for d in filtered:
         evidence = d.get("modality_evidence", {})
         modality_count = sum(
-            1 for m in ["RGB", "RGBD", "Thermal", "GPR"]
-            if evidence.get(m)
+            1 for mod in ["RGB", "RGBD", "Thermal", "GPR"]
+            if evidence.get(mod)
         )
         evidence_str = f"{modality_count}/4 modalities"
 
@@ -190,6 +223,7 @@ if filtered:
         tunnel_label = tunnel_id_to_label.get(d.get("tunnel_id"), "—")
 
         table_data.append({
+            "Select": select_all,
             "ID": d["defect_id"],
             "Tunnel": tunnel_label,
             "Description": d["description"],
@@ -207,15 +241,27 @@ if filtered:
 
     df = pd.DataFrame(table_data)
 
-    # Multi-row selection enables both navigation (single tick → set
-    # selected_defect_id) and bulk deletion (multiple ticks → delete).
-    event = st.dataframe(
+    # The editor key embeds select_all so flipping the toggle remounts
+    # the editor with the new default values; embeds the version so
+    # post-deletion remounts work cleanly.
+    editor_key = (
+        f"register_editor_v{st.session_state.register_editor_version}_"
+        f"{len(filtered)}_{select_all}"
+    )
+
+    edited_df = st.data_editor(
         df,
         use_container_width=True,
         hide_index=True,
-        on_select="rerun",
-        selection_mode="multi-row",
+        disabled=("ID", "Tunnel", "Description", "Location", "Type",
+                  "Priority", "Evidence", "Source", "Est. cost"),
         column_config={
+            "Select": st.column_config.CheckboxColumn(
+                "✓",
+                help="Tick to select this row for download or deletion",
+                default=False,
+                width="small",
+            ),
             "ID": st.column_config.TextColumn(width="small"),
             "Tunnel": st.column_config.TextColumn(width="small"),
             "Priority": st.column_config.TextColumn(width="small"),
@@ -223,117 +269,145 @@ if filtered:
             "Source": st.column_config.TextColumn(width="small"),
             "Est. cost": st.column_config.TextColumn(width="small"),
         },
+        key=editor_key,
     )
 
-    selected_rows = event.selection.rows if event.selection else []
-    selected_defects = [filtered[i] for i in selected_rows]
+    # Resolve the selection from the edited dataframe
+    selected_mask = edited_df["Select"].fillna(False).astype(bool).tolist()
+    selected_defects = [
+        filtered[i] for i, picked in enumerate(selected_mask) if picked
+    ]
     selected_ids = [d["defect_id"] for d in selected_defects]
 
-    # ---- Selection summary + actions ----
-    if selected_defects:
-        if len(selected_defects) == 1:
-            d = selected_defects[0]
-            st.session_state.selected_defect_id = d["defect_id"]
-            st.info(
-                f"Selected **{d['defect_id']}** — open **Defect Detail** "
-                f"in the sidebar to view the full FMEA chain, or use the "
-                f"actions below."
-            )
-        else:
-            st.info(
-                f"**{len(selected_defects)} defects selected** "
-                f"({', '.join(selected_ids[:5])}"
-                f"{'…' if len(selected_ids) > 5 else ''}). "
-                f"Selecting multiple rows is for bulk actions like "
-                f"deletion or export — Defect Detail uses only the first."
-            )
-
-        # ---- Delete UX with mandatory confirmation ----
-        with st.container(border=True):
-            st.markdown("**Delete selected defects**")
-
-            # Show breakdown so the operator sees what they're about to delete
-            ingested_to_del = [d for d in selected_defects if d.get("ingested")]
-            ontology_to_del = [d for d in selected_defects if not d.get("ingested")]
-
-            if ingested_to_del:
-                st.markdown(
-                    f"- **{len(ingested_to_del)} ingested** (this session): "
-                    f"{', '.join(d['defect_id'] for d in ingested_to_del[:5])}"
-                    f"{'…' if len(ingested_to_del) > 5 else ''}"
-                )
-            if ontology_to_del:
-                st.warning(
-                    f"⚠️ **{len(ontology_to_del)} from the ontology / "
-                    f"sample data:** "
-                    f"{', '.join(d['defect_id'] for d in ontology_to_del[:5])}"
-                    f"{'…' if len(ontology_to_del) > 5 else ''}. "
-                    f"These are demo defects — deleting them only removes "
-                    f"them from this session, not from the JSON file. "
-                    f"They will reappear after a server reboot."
-                )
-
-            confirm = st.checkbox(
-                f"I confirm I want to delete these "
-                f"{len(selected_defects)} defect(s)",
-                key="delete_confirm_checkbox",
-            )
-            delete_clicked = st.button(
-                "Delete selected",
-                type="primary",
-                disabled=not confirm,
-                key="delete_button",
-            )
-
-            if delete_clicked and confirm:
-                ids_to_delete = set(selected_ids)
-
-                # Remove from session-state defects (the merged list)
-                st.session_state.defects = [
-                    d for d in st.session_state.defects
-                    if d["defect_id"] not in ids_to_delete
-                ]
-                # Remove from ingested-this-session list (so the Ingest
-                # page counter and "registered this session" panel
-                # also update)
-                st.session_state.ingested_defects = [
-                    d for d in st.session_state.get("ingested_defects", [])
-                    if d["defect_id"] not in ids_to_delete
-                ]
-                # Clear selected_defect_id if it was one of the deleted
-                if st.session_state.get("selected_defect_id") in ids_to_delete:
-                    st.session_state.selected_defect_id = None
-
-                st.success(
-                    f"Deleted **{len(ids_to_delete)} defect(s)**: "
-                    f"{', '.join(sorted(ids_to_delete))}"
-                )
-                # Force a fresh render so the table and map drop the rows
-                st.rerun()
-else:
-    st.info("No defects match the current filters.")
+    # If exactly one is selected, also feed it to the Defect Detail nav
+    if len(selected_defects) == 1:
+        st.session_state.selected_defect_id = selected_defects[0]["defect_id"]
+        st.info(
+            f"**1 selected** — `{selected_defects[0]['defect_id']}`. "
+            f"Open **Defect Detail** in the sidebar for the FMEA chain, "
+            f"or use the export buttons below."
+        )
+    elif len(selected_defects) > 1:
+        st.info(
+            f"**{len(selected_defects)} selected** "
+            f"({', '.join(selected_ids[:5])}"
+            f"{'…' if len(selected_ids) > 5 else ''}). "
+            f"Selection is for actions like export. Defect Detail opens "
+            f"only one defect at a time — pick a single row to navigate."
+        )
 
 # -----------------------------------------------------------------------------
-# Export
+# Export — selection-driven, with smart fallback
 # -----------------------------------------------------------------------------
 st.divider()
-col1, col2 = st.columns(2)
-with col1:
-    if filtered:
-        csv = pd.DataFrame(filtered).to_csv(index=False).encode("utf-8")
+
+if filtered:
+    if selected_defects:
+        export_set = selected_defects
+        export_label_csv = f"Download selected ({len(export_set)}) as CSV"
+        export_label_json = f"Download selected ({len(export_set)}) as JSON"
+        export_filename = "defect_register_selected"
+    else:
+        export_set = filtered
+        export_label_csv = f"Download all filtered ({len(export_set)}) as CSV"
+        export_label_json = f"Download all filtered ({len(export_set)}) as JSON"
+        export_filename = "defect_register_filtered"
+
+    col1, col2 = st.columns(2)
+    with col1:
+        csv = pd.DataFrame(export_set).to_csv(index=False).encode("utf-8")
         st.download_button(
-            "Download filtered list (CSV)",
-            csv,
-            file_name="defect_register.csv",
+            export_label_csv, csv,
+            file_name=f"{export_filename}.csv",
             mime="text/csv",
         )
-with col2:
-    if filtered:
-        import json
-        jsonstr = json.dumps(filtered, indent=2, default=str).encode("utf-8")
+    with col2:
+        jsonstr = json.dumps(export_set, indent=2, default=str).encode("utf-8")
         st.download_button(
-            "Download as JSON",
-            jsonstr,
-            file_name="defect_register.json",
+            export_label_json, jsonstr,
+            file_name=f"{export_filename}.json",
             mime="application/json",
         )
+
+    st.caption(
+        "Tip: tick rows in the table above to download a specific subset; "
+        "with no selection, the buttons download every row that matches "
+        "the current filters."
+    )
+
+
+# -----------------------------------------------------------------------------
+# Subtle deletion — popover trigger + @st.dialog confirmation
+# -----------------------------------------------------------------------------
+@st.dialog("Confirm deletion")
+def _confirm_delete_dialog(ids_to_delete: list, ontology_ids: list):
+    """Modal confirmation for deletion."""
+    st.markdown(
+        f"You are about to delete **{len(ids_to_delete)} defect(s)**:"
+    )
+    st.code(", ".join(ids_to_delete), language=None)
+
+    if ontology_ids:
+        st.warning(
+            f"⚠ {len(ontology_ids)} of these came from the ontology / "
+            f"sample data. Deleting them only removes them from this "
+            f"session — they will reappear after a server reboot, since "
+            f"the JSON file itself is not modified."
+        )
+
+    final_confirm = st.checkbox(
+        "I understand and want to proceed",
+        key="delete_dialog_final_confirm",
+    )
+
+    col_a, col_b = st.columns(2)
+    with col_a:
+        if st.button("Cancel", use_container_width=True,
+                     key="delete_dialog_cancel"):
+            st.rerun()
+    with col_b:
+        if st.button(
+            "Delete", type="primary", use_container_width=True,
+            disabled=not final_confirm,
+            key="delete_dialog_proceed",
+        ):
+            ids_set = set(ids_to_delete)
+            st.session_state.defects = [
+                d for d in st.session_state.defects
+                if d["defect_id"] not in ids_set
+            ]
+            st.session_state.ingested_defects = [
+                d for d in st.session_state.get("ingested_defects", [])
+                if d["defect_id"] not in ids_set
+            ]
+            if st.session_state.get("selected_defect_id") in ids_set:
+                st.session_state.selected_defect_id = None
+            # Bump version so the editor and select_all remount cleanly
+            st.session_state.register_editor_version += 1
+            st.rerun()
+
+
+# Subtle trigger — at the very bottom of the page, only appears when
+# something is actually selected. No decoration in the main flow.
+if filtered and selected_defects:
+    st.divider()
+    with st.popover(
+        f"⋯ Manage selection ({len(selected_defects)})",
+        help="Subtle actions for the rows you've ticked in the table above.",
+    ):
+        st.caption(
+            "These actions apply to the rows you've ticked above. Use "
+            "deletion sparingly — the duplicate-prevention guard on the "
+            "Ingest page already catches accidental double-submissions."
+        )
+
+        if st.button(
+            f"🗑 Delete {len(selected_defects)} selected…",
+            key="open_delete_dialog",
+            help="Opens a confirmation dialog before anything is removed.",
+        ):
+            ontology_ids = [
+                d["defect_id"] for d in selected_defects
+                if not d.get("ingested")
+            ]
+            _confirm_delete_dialog(selected_ids, ontology_ids)
