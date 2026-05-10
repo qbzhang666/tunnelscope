@@ -180,16 +180,25 @@ def build_cross_section_svg(
     if not layers:
         return ""
 
-    # Bounds — show 30 m laterally (15 m each side) for context
-    x_lo, x_hi = -15, 15
+    # Compute depth range first so we can size the x-range to match
+    # the figure aspect ratio. This keeps the tunnel a true circle
+    # without needing matplotlib's "adjustable" mode (which leaves
+    # white margins on the strata rectangles).
     max_depth = max(
         layer.get("bottom_depth_m", 0) for layer in layers
     )
     max_depth = max(max_depth, tunnel_depth + tunnel_diameter_m / 2 + 3)
+    depth_range = max_depth - (-2)  # y goes from -2 (sky) to max_depth
 
     fig, ax = plt.subplots(
         figsize=(figure_width_in, figure_height_in), dpi=110
     )
+
+    # Choose x-range so 1m on x = 1m on y after figure scaling.
+    # ax aspect of data units: x_range / y_range == fig_width / fig_height
+    target_x_range = depth_range * (figure_width_in / figure_height_in)
+    x_lo = -target_x_range / 2
+    x_hi = target_x_range / 2
 
     # Strata as horizontal bands
     for layer in layers:
@@ -268,6 +277,10 @@ def build_cross_section_svg(
     # Axes
     ax.set_xlim(x_lo, x_hi)
     ax.set_ylim(max_depth, -2)  # invert: 0 at top
+    # Force 1:1 data aspect so the tunnel circle isn't squashed into
+    # an ellipse. We've pre-sized x_lo/x_hi to match the figure's
+    # aspect ratio so this won't pull the limits around.
+    ax.set_aspect("equal")
     ax.set_xlabel("Lateral distance from tunnel centreline (m)", fontsize=9)
     ax.set_ylabel("Depth below ground level (m)", fontsize=9)
     ax.set_title(
