@@ -653,7 +653,17 @@ def _render_geo_expandable():
                     defect_chainage_m=defect.get("chainage_m", 0),
                 )
                 if svg:
-                    st.image(svg.encode("utf-8"))
+                    # SVG is text/XML, not a raster format — st.image()
+                    # uses Pillow which can't decode SVG. Embed it as
+                    # inline HTML instead, which keeps the SVG scalable
+                    # and lets matplotlib's vector output render crisp
+                    # at any zoom level.
+                    st.markdown(
+                        f'<div style="max-width: 760px; margin: 0 auto;">'
+                        f'{svg}'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
             except Exception as exc:
                 st.caption(
                     f":grey[Could not render cross-section: {exc}]"

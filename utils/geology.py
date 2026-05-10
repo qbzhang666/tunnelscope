@@ -284,7 +284,15 @@ def build_cross_section_svg(
     buf = io.StringIO()
     fig.savefig(buf, format="svg", bbox_inches="tight")
     plt.close(fig)
-    return buf.getvalue()
+    svg_text = buf.getvalue()
+
+    # Strip the XML prelude and DOCTYPE so the SVG can be embedded
+    # directly inline in HTML via st.markdown(unsafe_allow_html=True).
+    # Without stripping, browsers reject the embedded prelude.
+    svg_start = svg_text.find("<svg")
+    if svg_start > 0:
+        svg_text = svg_text[svg_start:]
+    return svg_text
 
 
 # -----------------------------------------------------------------------------
