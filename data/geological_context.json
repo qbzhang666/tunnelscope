@@ -1,0 +1,277 @@
+{
+  "_meta": {
+    "demonstration_data": true,
+    "disclaimer": "Synthetic geological context for research demonstration. Tunnel B (anonymised Burnley) data is well-grounded in published sources for the real-world tunnel route (Paul et al. 2014 'Engineering Geological Evolution of the Jolimont Valley'; Holdgate/Cupper et al. 2003; Lamb & Hutchinson 1998; The Conversation 2025 Burnley reference). Tunnel A (anonymised West Gate) data is plausible per Melbourne regional geology (Yarra/Maribyrnong delta sequence, Coode Island Silt, Older Volcanics, Silurian Melbourne Formation basement) but the specific stratigraphic boundaries along that route are not published and are interpolated.",
+    "schema_version": "1.0",
+    "generated": "Rev 9",
+    "primary_sources": [
+      "Paul et al. 2014, 'The Engineering Geological Evolution of the Jolimont Valley, Melbourne, Victoria', Australian Geomechanics 49(2)",
+      "Holdgate G.R., Cupper M.L. et al. 2003, geological evolution of the Holocene Yarra Delta",
+      "Lamb K., Hutchinson J. 1998, ground models for the Burnley Tunnel",
+      "Cupper M.L. et al. 2003, Yarra Delta sediments stratigraphy",
+      "Geological Map of Melbourne SJ 55-5 (Victorian Department of Primary Industries)"
+    ]
+  },
+  "tunnels": {
+    "TUN-A": {
+      "tunnel_id": "TUN-A",
+      "label": "Tunnel A",
+      "geological_setting": "Yarraville–Footscray Road corridor crossing Maribyrnong/Yarra delta sequence above Silurian basement",
+      "groundwater_setting": "Generally below water table along bored sections; saline intrusion from estuarine system",
+      "data_provenance": "Plausible per Melbourne regional geology. Specific stratigraphic boundaries along this route are interpolated from regional geological mapping.",
+      "zones_along_chainage": [
+        {
+          "zone_id": "TUN-A-G01",
+          "chainage_range_m": [0, 96],
+          "name": "Western portal — recent fill and Coode Island Silt",
+          "primary_unit": "Engineered fill over Coode Island Silt",
+          "tunnel_substrate": "Coode Island Silt (CIS) — soft to firm grey silty clay, marine origin",
+          "groundwater_depth_to_water_table_m": 2.5,
+          "tunnel_depth_below_ground_m": 8,
+          "tunnel_depth_below_water_table_m": 5.5,
+          "engineering_notes": "Above water table at portal level after dewatering. Diaphragm wall support standard.",
+          "hazards": ["Soft cohesive ground", "Settlement risk", "Saline groundwater"]
+        },
+        {
+          "zone_id": "TUN-A-G02",
+          "chainage_range_m": [96, 560],
+          "name": "Western bored — Yarra Delta sediments and weathered basalt",
+          "primary_unit": "Coode Island Silt grading into Port Melbourne Sand; Newer Volcanics basalt at depth",
+          "tunnel_substrate": "Mixed-face: Port Melbourne Sand (loose to medium dense) overlying weathered basalt",
+          "groundwater_depth_to_water_table_m": 2.0,
+          "tunnel_depth_below_ground_m": 18,
+          "tunnel_depth_below_water_table_m": 16,
+          "engineering_notes": "TBM operated through mixed-face conditions (sand/clay/weathered basalt). Annular grouting at 2.5–3.5 bar.",
+          "hazards": ["Mixed-face conditions", "Permeable sand layers", "Weathered basalt blocks"]
+        },
+        {
+          "zone_id": "TUN-A-G03",
+          "chainage_range_m": [560, 1520],
+          "name": "Central deep — Silurian Melbourne Formation",
+          "primary_unit": "Silurian Melbourne Formation (interbedded siltstone and sandstone)",
+          "tunnel_substrate": "Slightly weathered to fresh Silurian mudstone/siltstone; locally fractured",
+          "groundwater_depth_to_water_table_m": 1.5,
+          "tunnel_depth_below_ground_m": 28,
+          "tunnel_depth_below_water_table_m": 26.5,
+          "engineering_notes": "Below water table along full length. Saline groundwater (estuarine zone). Higher cover and corrosion protection specified due to saline exposure. Annular grout at 3–4 bar.",
+          "hazards": ["High hydrostatic pressure", "Saline groundwater", "Fractured zones in mudstone"]
+        },
+        {
+          "zone_id": "TUN-A-G04",
+          "chainage_range_m": [1520, 2480],
+          "name": "Eastern bored — Yarra Delta sediments returning",
+          "primary_unit": "Yarra Delta sediments — Coode Island Silt and clays over weathered basalt",
+          "tunnel_substrate": "Mostly Coode Island Silt; transitions to mixed face toward eastern portal",
+          "groundwater_depth_to_water_table_m": 2.5,
+          "tunnel_depth_below_ground_m": 16,
+          "tunnel_depth_below_water_table_m": 13.5,
+          "engineering_notes": "TBM advance through silts and clays; ground conditions improve toward portal.",
+          "hazards": ["Soft cohesive ground", "Compressible silts"]
+        },
+        {
+          "zone_id": "TUN-A-G05",
+          "chainage_range_m": [2480, 2800],
+          "name": "Eastern portal — recent fill and silts",
+          "primary_unit": "Engineered fill over recent alluvium / Coode Island Silt",
+          "tunnel_substrate": "Engineered fill / Coode Island Silt",
+          "groundwater_depth_to_water_table_m": 3.0,
+          "tunnel_depth_below_ground_m": 7,
+          "tunnel_depth_below_water_table_m": 4,
+          "engineering_notes": "Cut-and-cover. Above water table after dewatering during construction.",
+          "hazards": ["Settlement risk", "Saline groundwater"]
+        }
+      ],
+      "stratigraphy_at_chainage_samples": [
+        {
+          "sample_chainage_m": 50,
+          "ground_level_m_AHD": 5,
+          "tunnel_centreline_depth_m": 8,
+          "layers": [
+            {"top_depth_m": 0, "bottom_depth_m": 1.5, "unit": "Engineered fill", "type": "fill", "colour": "#cdb79e"},
+            {"top_depth_m": 1.5, "bottom_depth_m": 14, "unit": "Coode Island Silt", "type": "soft_clay", "colour": "#a8b5a0"},
+            {"top_depth_m": 14, "bottom_depth_m": 30, "unit": "Port Melbourne Sand", "type": "sand", "colour": "#e8d49b"}
+          ],
+          "water_table_depth_m": 2.5
+        },
+        {
+          "sample_chainage_m": 350,
+          "ground_level_m_AHD": 8,
+          "tunnel_centreline_depth_m": 18,
+          "layers": [
+            {"top_depth_m": 0, "bottom_depth_m": 2, "unit": "Engineered fill", "type": "fill", "colour": "#cdb79e"},
+            {"top_depth_m": 2, "bottom_depth_m": 12, "unit": "Coode Island Silt", "type": "soft_clay", "colour": "#a8b5a0"},
+            {"top_depth_m": 12, "bottom_depth_m": 22, "unit": "Port Melbourne Sand", "type": "sand", "colour": "#e8d49b"},
+            {"top_depth_m": 22, "bottom_depth_m": 35, "unit": "Weathered Newer Volcanics basalt", "type": "weathered_basalt", "colour": "#7d6e5c"}
+          ],
+          "water_table_depth_m": 2.0
+        },
+        {
+          "sample_chainage_m": 950,
+          "ground_level_m_AHD": 12,
+          "tunnel_centreline_depth_m": 28,
+          "layers": [
+            {"top_depth_m": 0, "bottom_depth_m": 2, "unit": "Engineered fill / topsoil", "type": "fill", "colour": "#cdb79e"},
+            {"top_depth_m": 2, "bottom_depth_m": 8, "unit": "Coode Island Silt", "type": "soft_clay", "colour": "#a8b5a0"},
+            {"top_depth_m": 8, "bottom_depth_m": 14, "unit": "Older Volcanics basalt (weathered)", "type": "weathered_basalt", "colour": "#7d6e5c"},
+            {"top_depth_m": 14, "bottom_depth_m": 45, "unit": "Silurian Melbourne Formation (siltstone/sandstone)", "type": "mudstone", "colour": "#8a7256"}
+          ],
+          "water_table_depth_m": 1.5
+        },
+        {
+          "sample_chainage_m": 2000,
+          "ground_level_m_AHD": 7,
+          "tunnel_centreline_depth_m": 16,
+          "layers": [
+            {"top_depth_m": 0, "bottom_depth_m": 2, "unit": "Engineered fill", "type": "fill", "colour": "#cdb79e"},
+            {"top_depth_m": 2, "bottom_depth_m": 11, "unit": "Coode Island Silt", "type": "soft_clay", "colour": "#a8b5a0"},
+            {"top_depth_m": 11, "bottom_depth_m": 20, "unit": "Port Melbourne Sand", "type": "sand", "colour": "#e8d49b"},
+            {"top_depth_m": 20, "bottom_depth_m": 32, "unit": "Weathered Newer Volcanics basalt", "type": "weathered_basalt", "colour": "#7d6e5c"}
+          ],
+          "water_table_depth_m": 2.5
+        },
+        {
+          "sample_chainage_m": 2700,
+          "ground_level_m_AHD": 4,
+          "tunnel_centreline_depth_m": 7,
+          "layers": [
+            {"top_depth_m": 0, "bottom_depth_m": 1.5, "unit": "Engineered fill", "type": "fill", "colour": "#cdb79e"},
+            {"top_depth_m": 1.5, "bottom_depth_m": 12, "unit": "Coode Island Silt / recent alluvium", "type": "soft_clay", "colour": "#a8b5a0"}
+          ],
+          "water_table_depth_m": 3.0
+        }
+      ]
+    },
+    "TUN-B": {
+      "tunnel_id": "TUN-B",
+      "label": "Tunnel B",
+      "geological_setting": "Southbank–Burnley corridor crossing Yarra Delta sediments and entering deep Silurian Melbourne Formation under the Yarra River; intersects the Jolimont Valley channel feature near Burnley",
+      "groundwater_setting": "Below water table for ~95% of length; under Yarra River the deep mudstone section faces hydrostatic head exceeding 6 bar at maximum depth",
+      "data_provenance": "Well-grounded in Paul et al. 2014, Holdgate/Cupper et al. 2003, Lamb & Hutchinson 1998, and the Conversation Burnley reference. Stratigraphic units and approximate depths reflect the published cross-sections of the real tunnel route.",
+      "zones_along_chainage": [
+        {
+          "zone_id": "TUN-B-G01",
+          "chainage_range_m": [0, 448],
+          "name": "Western portal — Coode Island Silt / Port Melbourne Sand sequence",
+          "primary_unit": "Yarra Delta sediments — Coode Island Silt and Port Melbourne Sand",
+          "tunnel_substrate": "Port Melbourne Sand at tunnel level; Coode Island Silt as overburden",
+          "groundwater_depth_to_water_table_m": 2.0,
+          "tunnel_depth_below_ground_m": 14,
+          "tunnel_depth_below_water_table_m": 12,
+          "engineering_notes": "Top-down secant pile construction. Working through CIS / PMS sequence. Port Melbourne Sand acts as a confined aquifer under the silt — dewatering required.",
+          "hazards": ["Confined aquifer (PMS)", "Soft cohesive overburden (CIS)", "Potential for settlement above tunnel"]
+        },
+        {
+          "zone_id": "TUN-B-G02",
+          "chainage_range_m": [448, 1120],
+          "name": "Yarra crossing approach — Moray Street Gravels and weathered basalt",
+          "primary_unit": "Moray Street Gravels (sand/gravel aquifer ~20m thick) above Burnley Basalt and Older Volcanics",
+          "tunnel_substrate": "Weathered basalt grading into fresh basalt; Moray Street Gravels above",
+          "groundwater_depth_to_water_table_m": 1.5,
+          "tunnel_depth_below_ground_m": 35,
+          "tunnel_depth_below_water_table_m": 33.5,
+          "engineering_notes": "Roadheader excavation through weathered basalt overlying mudstone. Moray Street Gravels are a documented aquifer along this corridor (per Conversation 2025 reference; Burnley Tunnel construction encountered this aquifer requiring dewatering).",
+          "hazards": ["Permeable Moray Street Gravels aquifer above", "Highly variable basalt strength", "Approach to Yarra crossing — gasket sealing critical"]
+        },
+        {
+          "zone_id": "TUN-B-G03",
+          "chainage_range_m": [1120, 2080],
+          "name": "Yarra crossing — deep Silurian Melbourne Formation",
+          "primary_unit": "Silurian Melbourne Formation (siltstone, mudstone, fine sandstone)",
+          "tunnel_substrate": "Slightly weathered to fresh Melbourne Mudstone; locally fractured zones",
+          "groundwater_depth_to_water_table_m": 0,
+          "tunnel_depth_below_ground_m": 65,
+          "tunnel_depth_below_water_table_m": 65,
+          "engineering_notes": "Maximum depth ~65 m. Below the Yarra River. Driven through Silurian mudstone (Melbourne Mudstone). Encountered unexpectedly high water pressures during construction (per Wikipedia reference) requiring grouting interventions. Hydrostatic head approaches 6.5 bar at maximum depth. Mudstone is porous — water from Moray Street Gravels aquifer above can leak into deeper formations.",
+          "hazards": ["Maximum hydrostatic pressure (~6.5 bar)", "Porous mudstone allowing water transmission from upper aquifer", "Fractured zones increase local permeability", "Saline groundwater near river"]
+        },
+        {
+          "zone_id": "TUN-B-G04",
+          "chainage_range_m": [2080, 2960],
+          "name": "Eastern bored (Richmond) — Melbourne Formation with basalt intrusions",
+          "primary_unit": "Silurian Melbourne Formation with intermittent Older Volcanics basalt intrusions",
+          "tunnel_substrate": "Melbourne Mudstone with locally interbedded weathered basalt dykes",
+          "groundwater_depth_to_water_table_m": 4.0,
+          "tunnel_depth_below_ground_m": 25,
+          "tunnel_depth_below_water_table_m": 21,
+          "engineering_notes": "Mudstone with intermittent basalt intrusions (dykes weathered to clay locally). Standard ground conditions return. Crosses the Jolimont Valley channel feature inferred per Paul et al. 2014.",
+          "hazards": ["Variable mudstone/basalt interface", "Dyke-related discontinuities", "Jolimont Valley channel — variable infill"]
+        },
+        {
+          "zone_id": "TUN-B-G05",
+          "chainage_range_m": [2960, 3400],
+          "name": "Eastern portal (Burnley) — Burnley Basalt over mudstone",
+          "primary_unit": "Burnley Basalt (Newer Volcanics, ~0.81 Ma) overlying Melbourne Formation",
+          "tunnel_substrate": "Melbourne Mudstone; Burnley Basalt as cap",
+          "groundwater_depth_to_water_table_m": 5.0,
+          "tunnel_depth_below_ground_m": 12,
+          "tunnel_depth_below_water_table_m": 7,
+          "engineering_notes": "Top-down cut-and-cover. Burnley Basalt (Newer Volcanics, ~0.81 Ma per Page 1968) caps the formation. Above water table for most of the cut-and-cover section after dewatering.",
+          "hazards": ["Variable basalt thickness", "Weathering at basalt-mudstone interface"]
+        }
+      ],
+      "stratigraphy_at_chainage_samples": [
+        {
+          "sample_chainage_m": 200,
+          "ground_level_m_AHD": 4,
+          "tunnel_centreline_depth_m": 14,
+          "layers": [
+            {"top_depth_m": 0, "bottom_depth_m": 2, "unit": "Engineered fill / topsoil", "type": "fill", "colour": "#cdb79e"},
+            {"top_depth_m": 2, "bottom_depth_m": 8, "unit": "Coode Island Silt", "type": "soft_clay", "colour": "#a8b5a0"},
+            {"top_depth_m": 8, "bottom_depth_m": 22, "unit": "Port Melbourne Sand", "type": "sand", "colour": "#e8d49b"},
+            {"top_depth_m": 22, "bottom_depth_m": 35, "unit": "Werribee Formation", "type": "older_sediments", "colour": "#b09478"}
+          ],
+          "water_table_depth_m": 2.0
+        },
+        {
+          "sample_chainage_m": 700,
+          "ground_level_m_AHD": 6,
+          "tunnel_centreline_depth_m": 35,
+          "layers": [
+            {"top_depth_m": 0, "bottom_depth_m": 2, "unit": "Engineered fill", "type": "fill", "colour": "#cdb79e"},
+            {"top_depth_m": 2, "bottom_depth_m": 22, "unit": "Moray Street Gravels (aquifer)", "type": "gravel_aquifer", "colour": "#d4b896"},
+            {"top_depth_m": 22, "bottom_depth_m": 30, "unit": "Burnley Basalt (weathered)", "type": "weathered_basalt", "colour": "#7d6e5c"},
+            {"top_depth_m": 30, "bottom_depth_m": 50, "unit": "Burnley Basalt (fresh)", "type": "fresh_basalt", "colour": "#3d3530"},
+            {"top_depth_m": 50, "bottom_depth_m": 75, "unit": "Silurian Melbourne Formation", "type": "mudstone", "colour": "#8a7256"}
+          ],
+          "water_table_depth_m": 1.5
+        },
+        {
+          "sample_chainage_m": 1600,
+          "ground_level_m_AHD": 0,
+          "tunnel_centreline_depth_m": 65,
+          "layers": [
+            {"top_depth_m": 0, "bottom_depth_m": 6, "unit": "Yarra River water column", "type": "water", "colour": "#7eb6c9"},
+            {"top_depth_m": 6, "bottom_depth_m": 15, "unit": "Coode Island Silt (Yarra bed)", "type": "soft_clay", "colour": "#a8b5a0"},
+            {"top_depth_m": 15, "bottom_depth_m": 30, "unit": "Moray Street Gravels (aquifer)", "type": "gravel_aquifer", "colour": "#d4b896"},
+            {"top_depth_m": 30, "bottom_depth_m": 45, "unit": "Burnley Basalt", "type": "fresh_basalt", "colour": "#3d3530"},
+            {"top_depth_m": 45, "bottom_depth_m": 80, "unit": "Silurian Melbourne Formation (deep)", "type": "mudstone", "colour": "#8a7256"}
+          ],
+          "water_table_depth_m": 0
+        },
+        {
+          "sample_chainage_m": 2500,
+          "ground_level_m_AHD": 8,
+          "tunnel_centreline_depth_m": 25,
+          "layers": [
+            {"top_depth_m": 0, "bottom_depth_m": 2, "unit": "Engineered fill", "type": "fill", "colour": "#cdb79e"},
+            {"top_depth_m": 2, "bottom_depth_m": 10, "unit": "Quaternary alluvium", "type": "alluvium", "colour": "#c4a884"},
+            {"top_depth_m": 10, "bottom_depth_m": 18, "unit": "Older Volcanics basalt (weathered)", "type": "weathered_basalt", "colour": "#7d6e5c"},
+            {"top_depth_m": 18, "bottom_depth_m": 45, "unit": "Silurian Melbourne Formation", "type": "mudstone", "colour": "#8a7256"}
+          ],
+          "water_table_depth_m": 4.0
+        },
+        {
+          "sample_chainage_m": 3200,
+          "ground_level_m_AHD": 10,
+          "tunnel_centreline_depth_m": 12,
+          "layers": [
+            {"top_depth_m": 0, "bottom_depth_m": 1.5, "unit": "Engineered fill", "type": "fill", "colour": "#cdb79e"},
+            {"top_depth_m": 1.5, "bottom_depth_m": 8, "unit": "Burnley Basalt (~0.81 Ma)", "type": "fresh_basalt", "colour": "#3d3530"},
+            {"top_depth_m": 8, "bottom_depth_m": 35, "unit": "Silurian Melbourne Formation", "type": "mudstone", "colour": "#8a7256"}
+          ],
+          "water_table_depth_m": 5.0
+        }
+      ]
+    }
+  }
+}

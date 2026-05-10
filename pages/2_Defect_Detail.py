@@ -24,6 +24,17 @@ REVISED (Rev 8):
   construction notes, repair history) live in an expandable section
   immediately under the Component row. The chain stays readable;
   the data is one click away.
+
+REVISED (Rev 9):
+- Geological context layer added alongside BIM. Inline "Geology" badge
+  on the Component step (next to the BIM badge); expandable section
+  immediately below the BIM expander showing the geological zone,
+  layered stratigraphy, tunnel-substrate notes, hazards, and a
+  per-defect graphical cross-section diagram.
+- Cause caveat — short factual note about geological hazards at this
+  defect's chainage rendered as a sidebar caveat next to (NOT inside)
+  Step 5 (Cause) of the FMEA chain. Geology informs but does not
+  modify the inferred cause.
 """
 
 import streamlit as st
@@ -38,6 +49,10 @@ from utils.fmea_chain import (
     modality_state, MODALITY_LEVELS,
 )
 from utils.bim import get_bim_context
+from utils.geology import (
+    get_geology_context, build_cross_section_svg,
+    get_geology_cause_caveat,
+)
 from utils.styling import apply_custom_css
 
 st.set_page_config(page_title="Defect Detail", layout="wide")
@@ -336,6 +351,13 @@ bim_segment = bim_context["segment"]
 bim_tunnel = bim_context["tunnel"]
 bim_repairs = bim_context["repairs"]
 
+# Resolve geological context once. Drives the geology badge alongside
+# BIM, the geology expandable section, and the cause-step caveat.
+geo_context = get_geology_context(defect)
+geo_zone = geo_context["zone"]
+geo_strat = geo_context["stratigraphy"]
+geo_tunnel = geo_context["tunnel"]
+
 chain_data = defect.get("fmea_chain", [])
 if not chain_data:
     # Build the Component step's value so it includes segment-aware text
@@ -515,8 +537,138 @@ def _render_bim_expandable():
             )
 
 
+def _render_geo_inline_badge():
+    """A small inline badge after the BIM badge on the Component step.
+
+    Three states: ✓ (zone found), ⚠ (tunnel known but chainage out of
+    range), — (no tunnel_id at all).
+    """
+    if geo_zone is not None:
+        st.caption(
+            f"🗺️ **Geology ✓** — geological zone identified: "
+            f"`{geo_zone['zone_id']}` "
+            f"({geo_zone.get('name', '—')}). "
+            f"See **Geological context** below for stratigraphy, "
+            f"hazards, and a cross-section diagram at this chainage."
+        )
+    elif geo_tunnel is not None:
+        st.caption(
+            f"🗺️ **Geology ⚠** — tunnel record found, but chainage "
+            f"K{defect.get('chainage_m', 0):.0f}m is outside the defined "
+            f"geological zones. Check the chainage value."
+        )
+    else:
+        st.caption(
+            "🗺️ **Geology —** — no geological context linked to this "
+            "defect. Defect has no tunnel_id."
+        )
+
+
+def _render_geo_expandable():
+    """
+    The full geological context section. Renders only when there's a
+    zone to show, immediately after the BIM expander on the Component
+    step.
+
+    Three subsections:
+      1. Zone-along-chainage description (which zone this is, what
+         the substrate is, water table, hazards).
+      2. Stratigraphy at the nearest sample (layered table).
+      3. Cross-section diagram (matplotlib SVG embedded inline).
+    """
+    if geo_zone is None or geo_tunnel is None:
+        return
+
+    expander_label = (
+        f"🗺️ Geological context — zone {geo_zone['zone_id']} "
+        f"({geo_zone.get('name', '—')})"
+    )
+    with st.expander(expander_label, expanded=False):
+        if geo_context.get("is_demo_data"):
+            st.caption(
+                "⚠ Demonstration data — synthetic geological context. "
+                "Tunnel B (anonymised Burnley) data is well-grounded "
+                "in published sources (Paul et al. 2014, "
+                "Holdgate/Cupper 2003, Lamb & Hutchinson 1998). "
+                "Tunnel A geology is plausible per Melbourne regional "
+                "mapping but stratigraphic boundaries are interpolated."
+            )
+
+        # ---- Zone summary ----
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.markdown("**Zone**")
+            chainage_lo, chainage_hi = geo_zone.get("chainage_range_m",
+                                                    [0, 0])
+            st.markdown(
+                f"- ID: `{geo_zone['zone_id']}`\n"
+                f"- Range: K{chainage_lo:.0f}m – K{chainage_hi:.0f}m\n"
+                f"- Primary unit: {geo_zone.get('primary_unit', '—')}\n"
+                f"- Tunnel substrate: {geo_zone.get('tunnel_substrate', '—')}"
+            )
+        with col_b:
+            st.markdown("**Hydrogeology (preview — Rev 10 will expand this)**")
+            st.markdown(
+                f"- Water table depth: "
+                f"{geo_zone.get('groundwater_depth_to_water_table_m', '—')} m\n"
+                f"- Tunnel depth below ground: "
+                f"{geo_zone.get('tunnel_depth_below_ground_m', '—')} m\n"
+                f"- Tunnel below water table: "
+                f"{geo_zone.get('tunnel_depth_below_water_table_m', '—')} m"
+            )
+
+        # ---- Engineering notes ----
+        notes = geo_zone.get("engineering_notes")
+        if notes:
+            st.markdown("**Engineering notes for this zone**")
+            st.info(notes)
+
+        # ---- Hazards ----
+        hazards = geo_zone.get("hazards", [])
+        if hazards:
+            st.markdown("**Documented geological hazards in this zone**")
+            for h in hazards:
+                st.markdown(f"- {h}")
+
+        # ---- Stratigraphy table (text) ----
+        if geo_strat:
+            st.markdown(
+                f"**Layered stratigraphy** "
+                f"(sample at K{geo_strat.get('sample_chainage_m', '?')}m, "
+                f"defect at K{defect.get('chainage_m', 0):.0f}m)"
+            )
+            for layer in geo_strat.get("layers", []):
+                top = layer.get("top_depth_m", 0)
+                bottom = layer.get("bottom_depth_m", 0)
+                unit = layer.get("unit", "—")
+                st.markdown(
+                    f"- {top:.1f}–{bottom:.1f} m: **{unit}**"
+                )
+
+            # ---- Cross-section diagram ----
+            st.markdown("**Cross-section diagram**")
+            try:
+                svg = build_cross_section_svg(
+                    geo_strat,
+                    defect_chainage_m=defect.get("chainage_m", 0),
+                )
+                if svg:
+                    st.image(svg.encode("utf-8"))
+            except Exception as exc:
+                st.caption(
+                    f":grey[Could not render cross-section: {exc}]"
+                )
+
+        # ---- Provenance ----
+        provenance = geo_tunnel.get("data_provenance")
+        if provenance:
+            st.caption(f"**Data provenance:** {provenance}")
+
+
 # Render the chain. After the Component row (step 1), inject the
-# inline badge and the expandable as-built section.
+# inline badges and the expandable BIM and geology sections. After
+# the Cause row (step 5), inject a sidebar caveat with the geological
+# hazards at this chainage.
 for step in chain_data:
     with st.container():
         col1, col2 = st.columns([1, 4])
@@ -529,10 +681,22 @@ for step in chain_data:
             # Inline BIM badge attached to Component step
             if step["step"].startswith("1.") or "Component" in step["step"]:
                 _render_bim_inline_badge()
+                _render_geo_inline_badge()
+            # Geology cause caveat — small sidebar note next to Cause
+            if step["step"].startswith("5.") or "cause" in step["step"].lower():
+                caveat = get_geology_cause_caveat(defect)
+                if caveat:
+                    with st.container(border=True):
+                        st.caption(
+                            "Geological context (informational — does NOT "
+                            "modify the inferred cause above)"
+                        )
+                        st.markdown(caveat)
 
     # Expandable BIM section directly after Component row
     if step["step"].startswith("1.") or "Component" in step["step"]:
         _render_bim_expandable()
+        _render_geo_expandable()
 
 # -----------------------------------------------------------------------------
 # Prescribed intervention — ALWAYS shown
