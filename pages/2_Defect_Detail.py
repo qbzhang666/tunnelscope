@@ -651,6 +651,7 @@ def _render_geo_expandable():
                 svg = build_cross_section_svg(
                     geo_strat,
                     defect_chainage_m=defect.get("chainage_m", 0),
+                    defect_position=defect.get("position"),
                 )
                 if svg:
                     # SVG is text/XML, not a raster format — st.image()

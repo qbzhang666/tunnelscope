@@ -157,6 +157,7 @@ def get_geology_context(defect: Dict[str, Any]) -> Dict[str, Any]:
 def build_cross_section_svg(
     stratigraphy: Dict[str, Any],
     defect_chainage_m: float,
+    defect_position: Optional[str] = None,
     tunnel_diameter_m: float = 11.0,
     figure_height_in: float = 5.5,
     figure_width_in: float = 7.0,
@@ -167,6 +168,21 @@ def build_cross_section_svg(
 
     Y-axis: depth below ground level, m
     X-axis: lateral position relative to tunnel centreline, m
+
+    Parameters
+    ----------
+    stratigraphy : dict
+        The stratigraphy sample dict (from find_nearest_stratigraphy).
+    defect_chainage_m : float
+        Defect chainage (only used for the title; layer geometry comes
+        from `stratigraphy`).
+    defect_position : str, optional
+        Where on the tunnel circumference the defect is. One of
+        "Crown", "Invert", "Springline_L", "Springline_R",
+        "Sidewall_L", "Sidewall_R", or legacy "Sidewall". Defaults to
+        "Crown" if not given.
+    tunnel_diameter_m, figure_height_in, figure_width_in : float
+        Drawing parameters.
 
     Returns the SVG as a string. Emit-then-close pattern; no file is
     written.
@@ -251,16 +267,57 @@ def build_cross_section_svg(
         fontsize=9, color="#333", weight="bold", zorder=5,
     )
 
-    # Defect marker — red circle on the tunnel circumference (crown for now)
+    # Defect marker — position derived from the operator-supplied
+    # `position` field. The tunnel cross-section is viewed looking in
+    # the direction of increasing chainage:
+    #   - Crown        = top of tunnel        (x=0,  y=depth - r)
+    #   - Invert       = bottom of tunnel     (x=0,  y=depth + r)
+    #   - Springline_L = left springline      (x=-r, y=depth)
+    #   - Springline_R = right springline     (x=r,  y=depth)
+    #   - Sidewall_L   = left sidewall mid-h  (x=-r, y=depth) (same as Springline_L for this 2-D view)
+    #   - Sidewall_R   = right sidewall mid-h (x=r,  y=depth)
+    # Legacy "Sidewall" with no side defaults to right with a caption.
+    r = tunnel_diameter_m / 2
+    position_lookup = {
+        "crown":        (0.0, -r,  "top-right"),
+        "invert":       (0.0,  r,  "bottom-right"),
+        "springline_l": (-r,   0,  "left"),
+        "springline_r": ( r,   0,  "right"),
+        "sidewall_l":   (-r,   0,  "left"),
+        "sidewall_r":   ( r,   0,  "right"),
+        "sidewall":     ( r,   0,  "right"),  # legacy; default to right
+    }
+    pos_key = (defect_position or "Crown").strip().lower()
+    dx, dy_offset, label_side = position_lookup.get(
+        pos_key, position_lookup["crown"]
+    )
+    marker_x = dx
+    marker_y = tunnel_depth + dy_offset
+
+    # Annotation position depends on which side of the tunnel the marker
+    # is on so the label arrow doesn't cross the tunnel body.
+    if label_side == "top-right":
+        annot_x, annot_y = 4.5, marker_y - 2
+    elif label_side == "bottom-right":
+        annot_x, annot_y = 4.5, marker_y + 2
+    elif label_side == "left":
+        annot_x, annot_y = marker_x - 6, marker_y - 1.5
+    else:  # right
+        annot_x, annot_y = marker_x + 4, marker_y - 1.5
+
     ax.plot(
-        0, tunnel_depth - tunnel_diameter_m / 2,
+        marker_x, marker_y,
         marker="o", markersize=10, color="#d62728",
         markeredgecolor="white", markeredgewidth=1.5, zorder=6,
     )
+    annot_label = (
+        f"Defect ({defect_position})"
+        if defect_position else "Defect (assumed crown)"
+    )
     ax.annotate(
-        "Defect",
-        xy=(0, tunnel_depth - tunnel_diameter_m / 2),
-        xytext=(4.5, tunnel_depth - tunnel_diameter_m / 2 - 2),
+        annot_label,
+        xy=(marker_x, marker_y),
+        xytext=(annot_x, annot_y),
         fontsize=9, color="#d62728", weight="bold",
         arrowprops=dict(arrowstyle="->", color="#d62728", lw=1.2),
         zorder=7,

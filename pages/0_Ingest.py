@@ -112,15 +112,91 @@ extraction_route = st.radio(
     options=[
         "Manual entry — I'll type the details myself",
         "Heuristic stub — let the app pre-fill what it can",
+        "Local LVM (Ollama / Qwen) — manual feedback loop",
     ],
     help=(
-        "The heuristic stub is a clearly-labelled placeholder for an "
-        "upstream ML pipeline. It uses filename keywords and text "
-        "regex — fine for a demo, not for production."
+        "Three options.  **Manual** is exactly what it sounds like.  "
+        "**Heuristic** uses filename keywords and text regex — fine for "
+        "a demo, not for production.  **Local LVM** sends the uploaded "
+        "image or text to a vision-capable model running on YOUR machine "
+        "via Ollama (e.g. Qwen2.5-VL).  The model's response is shown so "
+        "you can read it and manually copy useful fields into the form "
+        "below — the feedback loop is intentionally manual at this stage."
     ),
 )
 
 st.divider()
+
+# -----------------------------------------------------------------------------
+# Local LVM panel — only shown when that route is selected
+# -----------------------------------------------------------------------------
+USE_LOCAL_LVM = extraction_route.startswith("Local LVM")
+
+if USE_LOCAL_LVM:
+    from utils.local_lvm import (
+        check_ollama_health, list_local_models,
+        DEFAULT_ENDPOINT, DEFAULT_MODEL,
+        DEFAULT_IMAGE_PROMPT, DEFAULT_TEXT_PROMPT,
+    )
+
+    st.info(
+        "**Local LVM mode — how this works.**  Your image or report is "
+        "sent to a model server running on **your own machine** (Ollama, "
+        "by default at `http://localhost:11434`).  Nothing leaves your "
+        "machine; this is not a cloud inference call.  The model's "
+        "response appears below — read it, then manually type the "
+        "relevant fields into the form.  This is deliberate: silently "
+        "auto-parsing model output would create wrong metadata if the "
+        "model hallucinated, so a human-in-the-loop confirmation step "
+        "is required.  If Ollama is not running locally (e.g. on the "
+        "Streamlit Cloud deployment), this mode will not work — fall "
+        "back to Manual or Heuristic."
+    )
+
+    with st.expander("Local model configuration", expanded=True):
+        col_cfg1, col_cfg2 = st.columns(2)
+        with col_cfg1:
+            ollama_endpoint = st.text_input(
+                "Ollama endpoint",
+                value=st.session_state.get(
+                    "ollama_endpoint", DEFAULT_ENDPOINT
+                ),
+                help="Default is the standard local Ollama address. "
+                     "Change only if you've configured Ollama on a "
+                     "different host/port.",
+            )
+            st.session_state.ollama_endpoint = ollama_endpoint
+        with col_cfg2:
+            # Try to populate the model selector from the live server
+            health_ok, health_msg = check_ollama_health(ollama_endpoint)
+            if health_ok:
+                models_available = list_local_models(ollama_endpoint)
+                if not models_available:
+                    models_available = [DEFAULT_MODEL]
+                ollama_model = st.selectbox(
+                    "Model",
+                    options=models_available,
+                    index=(models_available.index(DEFAULT_MODEL)
+                           if DEFAULT_MODEL in models_available else 0),
+                    help="Picked from the models installed in your "
+                         "local Ollama. For images, pick a "
+                         "vision-capable model (Qwen2.5-VL, LLaVA, "
+                         "Llama 3.2 Vision).",
+                )
+            else:
+                ollama_model = st.text_input(
+                    "Model name (server unreachable — type manually)",
+                    value=DEFAULT_MODEL,
+                )
+            st.session_state.ollama_model = ollama_model
+
+        if health_ok:
+            st.success(f"✓ {health_msg}")
+        else:
+            st.warning(f"⚠ {health_msg}")
+
+    st.divider()
+
 
 # -----------------------------------------------------------------------------
 # Helpers — common rendering
@@ -230,6 +306,53 @@ if input_route.startswith("Image"):
         col_img, col_form = st.columns([1, 2])
         with col_img:
             st.image(uploaded, caption=uploaded.name, use_container_width=True)
+
+        # ---- Local LVM inference (image route) ----
+        if USE_LOCAL_LVM:
+            with col_form:
+                st.markdown("**Local LVM inference**")
+                custom_prompt = st.text_area(
+                    "Prompt",
+                    value=st.session_state.get(
+                        "lvm_image_prompt", DEFAULT_IMAGE_PROMPT
+                    ),
+                    height=180,
+                    help="Edit if you want different output formatting. "
+                         "Defaults are tuned for tunnel inspection.",
+                )
+                st.session_state.lvm_image_prompt = custom_prompt
+
+                if st.button("Run inference on this image",
+                             key="run_lvm_image"):
+                    from utils.local_lvm import run_image_inference
+                    with st.spinner(
+                        f"Running {st.session_state.ollama_model} "
+                        f"on local machine — this may take 30–120 s "
+                        f"depending on model size and CPU/GPU…"
+                    ):
+                        result = run_image_inference(
+                            image_bytes=uploaded.getvalue(),
+                            prompt=custom_prompt,
+                            model=st.session_state.ollama_model,
+                            endpoint=st.session_state.ollama_endpoint,
+                        )
+                    st.session_state.lvm_image_result = result
+
+                # Show last inference result if any
+                last_result = st.session_state.get("lvm_image_result")
+                if last_result:
+                    if last_result["ok"]:
+                        st.success("Inference complete — read the model "
+                                   "output below and copy relevant fields "
+                                   "into the form. Do NOT trust verbatim.")
+                        st.markdown("**Model output:**")
+                        st.markdown(
+                            f"> {last_result['text']}".replace("\n", "\n> ")
+                        )
+                    else:
+                        st.error(
+                            f"Inference failed: {last_result.get('error', 'unknown')}"
+                        )
 
         if extraction_route.startswith("Heuristic"):
             prefilled_defect_type = heuristic_defect_type_from_filename(
@@ -404,6 +527,50 @@ else:
                              expanded=False):
                 st.code(extracted_text[:1500] +
                         ("..." if len(extracted_text) > 1500 else ""))
+
+            # ---- Local LVM inference (text route) ----
+            if USE_LOCAL_LVM:
+                st.markdown("**Local LVM inference**")
+                custom_text_prompt = st.text_area(
+                    "Prompt template (use `{text}` where the "
+                    "extracted text should be substituted)",
+                    value=st.session_state.get(
+                        "lvm_text_prompt", DEFAULT_TEXT_PROMPT
+                    ),
+                    height=200,
+                    key="lvm_text_prompt_area",
+                )
+                st.session_state.lvm_text_prompt = custom_text_prompt
+
+                if st.button("Run inference on this report",
+                             key="run_lvm_text"):
+                    from utils.local_lvm import run_text_inference
+                    with st.spinner(
+                        f"Running {st.session_state.ollama_model} "
+                        f"on local machine…"
+                    ):
+                        result = run_text_inference(
+                            text=extracted_text,
+                            prompt_template=custom_text_prompt,
+                            model=st.session_state.ollama_model,
+                            endpoint=st.session_state.ollama_endpoint,
+                        )
+                    st.session_state.lvm_text_result = result
+
+                last_result = st.session_state.get("lvm_text_result")
+                if last_result:
+                    if last_result["ok"]:
+                        st.success("Inference complete — read the model "
+                                   "output below and copy useful fields "
+                                   "into the form. Do NOT trust verbatim.")
+                        st.markdown("**Model output:**")
+                        st.markdown(
+                            f"> {last_result['text']}".replace("\n", "\n> ")
+                        )
+                    else:
+                        st.error(
+                            f"Inference failed: {last_result.get('error', 'unknown')}"
+                        )
 
             if extraction_route.startswith("Heuristic"):
                 heur = heuristic_fields_from_text(extracted_text)
