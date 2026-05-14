@@ -48,12 +48,21 @@ graph_size = len(graph)
 # Spalls, LeakingJoints, ...) are counted alongside ones typed directly
 # as DefectCondition. Without the property path, rdflib counts only
 # direct-typed instances and misses the rest.
+#
+# Rev 11b: the OWL 2 RL reasoner activated in Rev 11 makes the property
+# path also match the subclass NODES themselves (Cracks, Spalls etc.)
+# because rdfs:subClassOf becomes reflexive under closure. The two
+# FILTER NOT EXISTS clauses exclude any URI that has been declared as
+# a class — keeping the count to genuine instances.
 instance_check = """
 PREFIX tun: <http://w3id.org/tunnel-dt/ontology/v1.2#>
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
 SELECT (COUNT(DISTINCT ?d) AS ?count) WHERE {
     ?d rdf:type/rdfs:subClassOf* tun:DefectCondition .
+    FILTER NOT EXISTS { ?d rdf:type owl:Class . }
+    FILTER NOT EXISTS { ?d rdf:type rdfs:Class . }
 }
 """
 try:
@@ -126,9 +135,12 @@ ORDER BY ?parent ?child
     "Instances — list all defect instances (subclass-aware)": """PREFIX tun: <http://w3id.org/tunnel-dt/ontology/v1.2#>
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
 
 SELECT ?defect ?type WHERE {
     ?defect rdf:type/rdfs:subClassOf* tun:DefectCondition .
+    FILTER NOT EXISTS { ?defect rdf:type owl:Class . }
+    FILTER NOT EXISTS { ?defect rdf:type rdfs:Class . }
     OPTIONAL { ?defect tun:hasType ?type . }
 }
 ORDER BY ?defect

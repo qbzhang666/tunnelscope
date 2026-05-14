@@ -225,6 +225,21 @@ def _materialise_json_defects_into_graph(g: Graph) -> None:
         if not defect_id:
             continue
 
+        # Rev 11b: reject defect_id values that collide with a known
+        # class name. This guards against malformed JSON entries where
+        # the type accidentally got copied into the ID field — the
+        # symptom is rows in the Defect Register showing class names
+        # (e.g. "Cracks", "VoidBehindLining", "Delaminations") in the
+        # ID column instead of proper "D-####-X" identifiers, with no
+        # tunnel / description / location data.
+        # The defect_id must look like a real ID, NOT a class label.
+        if defect_id in type_to_class:
+            continue
+        # Also reject IDs that aren't of the canonical pattern D-####-X
+        # if they happen to match any other TBox class via case-folding.
+        if defect_id.lower().strip() in type_to_class_ci:
+            continue
+
         subj = TUN[defect_id]
 
         # Skip if already in graph (TTL took precedence)
@@ -294,15 +309,31 @@ def load_defects(_graph: Graph) -> List[Dict[str, Any]]:
     # Without `rdfs:subClassOf*`, an instance typed as `tun:LeakingJoints`
     # is not matched by `?d rdf:type tun:DefectCondition` — that was the
     # core bug. The path matches direct types AND subclass-typed instances.
+    #
+    # Rev 11b: after activating the OWL 2 RL reasoner in Rev 11, the
+    # property path `rdf:type/rdfs:subClassOf*` started matching the
+    # SUBCLASS NODES THEMSELVES (Cracks, Spalls, Delaminations,
+    # VoidBehindLining, ...), not just their instances. This is because
+    # OWL 2 RL closure makes `rdfs:subClassOf` reflexive — a class is a
+    # subclass of itself — and any class declared as a subclass of
+    # DefectCondition therefore matches the pattern.
+    #
+    # The fix: explicitly require ?defect to NOT be a class. The two
+    # FILTER NOT EXISTS clauses below exclude any URI that has been
+    # declared as owl:Class or rdfs:Class (which the reasoner will have
+    # asserted for every TBox class node).
     query = """
     PREFIX tun: <http://w3id.org/tunnel-dt/ontology/v1.2#>
     PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
     PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+    PREFIX owl: <http://www.w3.org/2002/07/owl#>
 
     SELECT ?defect ?type ?ring ?chainage ?position
            ?severity ?priority ?cost ?completeness ?description
     WHERE {
         ?defect rdf:type/rdfs:subClassOf* tun:DefectCondition .
+        FILTER NOT EXISTS { ?defect rdf:type owl:Class . }
+        FILTER NOT EXISTS { ?defect rdf:type rdfs:Class . }
         OPTIONAL { ?defect tun:hasType ?type . }
         OPTIONAL { ?defect tun:atRingID ?ring . }
         OPTIONAL { ?defect tun:atChainage ?chainage . }
