@@ -23,6 +23,35 @@ REVISIONS (Rev 5)
    sample data (added: Staining, Honeycombing, ConstructionJointDefect).
    Lookup is case-insensitive and whitespace-tolerant as
    defence-in-depth against minor spelling drift.
+
+REVISIONS (Rev 11)
+------------------
+5. Activate the OWL 2 RL reasoner (owlrl). After all TTL parsing
+   and JSON materialisation is complete, run
+   `owlrl.DeductiveClosure(owlrl.OWLRL_Semantics).expand(g)` to
+   materialise the OWL 2 RL closure into the graph. This includes:
+     - subClassOf and equivalentClass closure
+     - subPropertyOf closure
+     - property characteristics (Transitive, Symmetric, Inverse,
+       Functional, InverseFunctional)
+     - domain and range inferences
+   After this step the `/rdfs:subClassOf*` property paths used in
+   downstream SPARQL queries (added in Rev 5) become semantically
+   redundant — the inferences they were faking are now materialised
+   in the graph. The property paths are LEFT IN PLACE because (a)
+   they are still correct, (b) they make the reasoning visible in
+   the query text rather than hidden in load-time inference, and
+   (c) if a future deployment swaps in a different reasoner or
+   skips inference entirely (for performance), the queries continue
+   to work unchanged.
+
+   The closure runs once at load time and is cached via
+   @st.cache_resource on load_ontology(), so the cost is paid once
+   per session. Typical observed cost on the three-ontology TBox +
+   JSON ABox: < 2 seconds. A try/except wraps the call so a broken
+   axiom in the TTL doesn't kill app startup; if the closure step
+   fails the graph is left in its un-expanded state (still queryable
+   via the existing property-path queries) and a warning is logged.
 """
 
 import json
@@ -32,6 +61,15 @@ from typing import List, Dict, Any
 import streamlit as st
 from rdflib import Graph, Namespace, URIRef, Literal, BNode
 from rdflib.namespace import RDF, RDFS, OWL, XSD
+
+# OWL 2 RL reasoner (pure Python, integrates with rdflib in-process).
+# Imported lazily-tolerant: if the package is somehow missing the rest
+# of the loader still works without inference.
+try:
+    import owlrl
+    _OWLRL_AVAILABLE = True
+except ImportError:
+    _OWLRL_AVAILABLE = False
 
 # -----------------------------------------------------------------------------
 # Namespaces — match the URIs used in your Protégé ontology
@@ -64,6 +102,13 @@ def load_ontology() -> Graph:
     After loading the TTL files, also materialises any defects in
     data/defects_tunnel_a.json into the graph as triples, so SPARQL
     queries on Page 3 can reach every defect.
+
+    Finally (Rev 11), runs the OWL 2 RL reasoner over the assembled
+    graph to materialise the inference closure (subClassOf,
+    equivalentClass, subPropertyOf, property characteristics, domain
+    and range). After this step the graph contains all derivable
+    triples, so subclass-typed defects match `rdf:type ?cls` directly
+    without needing property-path traversal.
     """
     g = Graph()
     g.bind("tun", TUN)
@@ -88,6 +133,27 @@ def load_ontology() -> Graph:
     # Catches the case where the TTL only has 2 demo instances but the
     # JSON has the full 7 — we want all 7 reachable via SPARQL.
     _materialise_json_defects_into_graph(g)
+
+    # ------------------------------------------------------------------
+    # OWL 2 RL reasoning step (Rev 11).
+    # Run AFTER both TTL parsing and JSON materialisation so that the
+    # JSON-derived triples participate in the inference closure.
+    #
+    # Failure-mode: if the reasoner errors (e.g. an axiom in the TTL is
+    # malformed), we keep the un-expanded graph and continue — every
+    # downstream SPARQL query already uses `rdf:type/rdfs:subClassOf*`
+    # property paths from Rev 5, so the app remains functionally
+    # equivalent without inference. The warning surfaces the issue
+    # in the Streamlit UI for diagnosis.
+    # ------------------------------------------------------------------
+    if _OWLRL_AVAILABLE:
+        try:
+            owlrl.DeductiveClosure(owlrl.OWLRL_Semantics).expand(g)
+        except Exception as e:
+            st.warning(
+                f"OWL 2 RL closure skipped (graph still queryable via "
+                f"property paths): {e}"
+            )
 
     return g
 
