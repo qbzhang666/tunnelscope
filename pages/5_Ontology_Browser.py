@@ -59,21 +59,52 @@ tab1, tab2, tab3, tab4 = st.tabs([
 with tab1:
     st.markdown("### Class hierarchy")
 
-    def get_children(parent):
+    def _get_children(parent):
         return sorted([
             c for c in graph.subjects(RDFS.subClassOf, parent)
             if not str(c).startswith("http://www.w3.org/")
-        ])
+        ], key=str)
 
-    def display_class(cls, depth=0):
-        label = str(cls).split("#")[-1] if "#" in str(cls) else str(cls)
-        indent = "&nbsp;" * (depth * 4)
+    def _render_class_html(cls, path=None):
+        """
+        Return an HTML string for a class and its descendants.
+        Uses path-based cycle detection to handle reflexive rdfs:subClassOf
+        triples introduced by the OWL 2 RL reasoner (a class is its own
+        subclass), which would otherwise cause infinite recursion.
+        """
+        if path is None:
+            path = frozenset()
+        if cls in path:
+            return ""
+
+        new_path = path | {cls}
+        label = str(cls).split("#")[-1] if "#" in str(cls) else str(cls).split("/")[-1]
         comment = list(graph.objects(cls, RDFS.comment))
-        comment_text = f" — *{str(comment[0])}*" if comment else ""
-        st.markdown(f"{indent}• **{label}**{comment_text}",
-                    unsafe_allow_html=True)
-        for child in get_children(cls):
-            display_class(child, depth + 1)
+        comment_html = (
+            f" <em style='color:#5F5E5A;font-size:15px'>{str(comment[0])}</em>"
+            if comment else ""
+        )
+
+        children = [c for c in _get_children(cls) if c not in new_path]
+
+        if children:
+            children_html = "".join(_render_class_html(c, new_path) for c in children)
+            return (
+                f'<details style="margin:3px 0">'
+                f'<summary style="cursor:pointer;padding:3px 0;font-size:16px">'
+                f'<strong>{label}</strong>{comment_html}'
+                f'</summary>'
+                f'<div style="margin-left:1.5rem;border-left:2px solid #E5E4DE;padding-left:0.75rem">'
+                f'{children_html}'
+                f'</div>'
+                f'</details>'
+            )
+        else:
+            return (
+                f'<div style="margin:3px 0;padding:3px 0;font-size:16px">'
+                f'&#8226; <strong>{label}</strong>{comment_html}'
+                f'</div>'
+            )
 
     root_classes = [
         c for c in classes
@@ -83,8 +114,11 @@ with tab1:
     root_classes = [c for c in root_classes if "#" in str(c)]
 
     if root_classes:
-        for root in sorted(root_classes, key=str):
-            display_class(root)
+        tree_html = "".join(_render_class_html(root) for root in sorted(root_classes, key=str))
+        st.markdown(
+            f'<div style="line-height:1.7">{tree_html}</div>',
+            unsafe_allow_html=True,
+        )
     else:
         st.info("No class hierarchy found. Is the ontology file loaded?")
 

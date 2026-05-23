@@ -159,7 +159,7 @@ def apply_custom_css():
         background: #F1EFE8;
         padding: 2px 7px;
         border-radius: 4px;
-        font-size: 1em !important;
+        font-size: 16px !important;
     }
 
     /* Defect priority badges */
