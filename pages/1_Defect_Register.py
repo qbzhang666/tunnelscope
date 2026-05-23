@@ -62,19 +62,21 @@ tunnels = list_tunnels()
 tunnel_id_to_label = {t["tunnel_id"]: t["label"] for t in tunnels}
 
 with st.expander("Filters", expanded=True):
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3 = st.columns(3)
 
     with col1:
         type_filter = st.multiselect(
             "Defect type",
             options=sorted(set(d["defect_type"] for d in defects)),
             default=[],
+            placeholder="All types",
         )
     with col2:
         priority_filter = st.multiselect(
             "Priority",
             options=["HIGH", "MEDIUM", "LOW"],
             default=[],
+            placeholder="All priorities",
         )
     with col3:
         tunnel_filter = st.multiselect(
@@ -82,12 +84,17 @@ with st.expander("Filters", expanded=True):
             options=[t["tunnel_id"] for t in tunnels],
             format_func=lambda x: tunnel_id_to_label.get(x, x),
             default=[],
+            placeholder="All tunnels",
         )
+
+    col4, col5 = st.columns(2)
+
     with col4:
         source_filter = st.multiselect(
             "Source",
             options=["Ontology", "Ingested (this session)"],
             default=[],
+            placeholder="All sources",
         )
     with col5:
         sort_by = st.selectbox(
@@ -253,6 +260,7 @@ else:
         df,
         use_container_width=True,
         hide_index=True,
+        row_height=42,
         disabled=("ID", "Tunnel", "Description", "Location", "Type",
                   "Priority", "Evidence", "Source", "Est. cost"),
         column_config={
