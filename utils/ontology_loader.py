@@ -197,7 +197,7 @@ def _materialise_json_defects_into_graph(g: Graph) -> None:
         return
 
     try:
-        with open(sample_path) as f:
+        with open(sample_path, encoding="utf-8") as f:
             defects = json.load(f)
     except Exception:
         return
@@ -380,7 +380,7 @@ def load_defects(_graph: Graph) -> List[Dict[str, Any]]:
     json_defects = []
     if sample_path.exists():
         try:
-            with open(sample_path) as f:
+            with open(sample_path, encoding="utf-8") as f:
                 json_defects = json.load(f)
         except Exception:
             json_defects = []

@@ -24,17 +24,95 @@ import folium
 ROOT = Path(__file__).parent.parent
 DATA_DIR = ROOT / "data"
 GEOMETRY_FILE = DATA_DIR / "tunnel_geometry.json"
+CUSTOM_GEOMETRY_FILE = DATA_DIR / "custom_tunnels.json"
 
 
 # -----------------------------------------------------------------------------
 # Geometry loading
 # -----------------------------------------------------------------------------
 def load_tunnel_geometry() -> Dict[str, Any]:
-    """Load tunnel alignment data from JSON. Returns dict with 'tunnels' key."""
-    if not GEOMETRY_FILE.exists():
-        return {"tunnels": []}
-    with open(GEOMETRY_FILE) as f:
-        return json.load(f)
+    """
+    Load tunnel alignment data. Returns dict with 'tunnels' key.
+
+    Merges two sources:
+      - data/tunnel_geometry.json   — the built-in demo tunnels (A, B)
+      - data/custom_tunnels.json    — tunnels the user created on the
+        Tunnel Setup page
+
+    Merging here means every consumer (maps, pickers, the click
+    resolver) sees user-created tunnels with no further changes.
+    A malformed custom file is ignored rather than crashing the app.
+    """
+    tunnels: List[Dict[str, Any]] = []
+    if GEOMETRY_FILE.exists():
+        with open(GEOMETRY_FILE, encoding="utf-8") as f:
+            tunnels.extend(json.load(f).get("tunnels", []))
+    if CUSTOM_GEOMETRY_FILE.exists():
+        try:
+            with open(CUSTOM_GEOMETRY_FILE, encoding="utf-8") as f:
+                tunnels.extend(json.load(f).get("tunnels", []))
+        except Exception:
+            pass
+    return {"tunnels": tunnels}
+
+
+# -----------------------------------------------------------------------------
+# Custom tunnels — created by the user on the Tunnel Setup page
+# -----------------------------------------------------------------------------
+# Palette cycled through as the user adds tunnels, starting with the
+# app's primary theme colour.
+CUSTOM_TUNNEL_PALETTE = ["#534AB7", "#e07b39", "#0e7c7b", "#9467bd", "#b5651d"]
+
+
+def list_custom_tunnels() -> List[Dict[str, Any]]:
+    """Return only the user-created tunnel records."""
+    if not CUSTOM_GEOMETRY_FILE.exists():
+        return []
+    try:
+        with open(CUSTOM_GEOMETRY_FILE, encoding="utf-8") as f:
+            return json.load(f).get("tunnels", [])
+    except Exception:
+        return []
+
+
+def save_custom_tunnel(tunnel: Dict[str, Any]) -> Tuple[bool, str]:
+    """
+    Append a user-created tunnel to data/custom_tunnels.json.
+
+    Refuses duplicate IDs (across built-in AND custom tunnels) so a
+    custom tunnel can never shadow Tunnel A/B or another custom one.
+    Returns (ok, message).
+    """
+    tunnel_id = tunnel.get("tunnel_id", "").strip()
+    if not tunnel_id:
+        return False, "Tunnel ID is empty."
+    existing = {t["tunnel_id"] for t in load_tunnel_geometry()["tunnels"]}
+    if tunnel_id in existing:
+        return False, (
+            f"Tunnel ID '{tunnel_id}' already exists. "
+            f"Pick a different ID."
+        )
+
+    customs = list_custom_tunnels()
+    tunnel.setdefault(
+        "colour", CUSTOM_TUNNEL_PALETTE[len(customs) % len(CUSTOM_TUNNEL_PALETTE)]
+    )
+    tunnel["custom"] = True
+    customs.append(tunnel)
+    with open(CUSTOM_GEOMETRY_FILE, "w", encoding="utf-8") as f:
+        json.dump({"tunnels": customs}, f, indent=2)
+    return True, f"Tunnel '{tunnel_id}' saved."
+
+
+def delete_custom_tunnel(tunnel_id: str) -> bool:
+    """Remove a user-created tunnel. Built-in tunnels cannot be deleted."""
+    customs = list_custom_tunnels()
+    remaining = [t for t in customs if t.get("tunnel_id") != tunnel_id]
+    if len(remaining) == len(customs):
+        return False
+    with open(CUSTOM_GEOMETRY_FILE, "w", encoding="utf-8") as f:
+        json.dump({"tunnels": remaining}, f, indent=2)
+    return True
 
 
 def get_tunnel(tunnel_id: str) -> Optional[Dict[str, Any]]:
@@ -174,6 +252,11 @@ TUNNEL_COLOURS = {"TUN-A": "#1f78b4", "TUN-B": "#33a02c"}
 PRIORITY_COLOURS = {"HIGH": "#d62728", "MEDIUM": "#ff7f0e", "LOW": "#999999"}
 
 
+def _tunnel_colour(t: Dict[str, Any]) -> str:
+    """Colour for a tunnel polyline — custom tunnels carry their own."""
+    return t.get("colour") or TUNNEL_COLOURS.get(t["tunnel_id"], "#666666")
+
+
 def _midpoint(coords_list: List[List[float]]) -> Tuple[float, float]:
     """Return the centroid of a list of (lat, lon) pairs."""
     if not coords_list:
@@ -217,7 +300,7 @@ def build_overview_map(
         alignment = t.get("alignment", [])
         if len(alignment) < 2:
             continue
-        colour = TUNNEL_COLOURS.get(t["tunnel_id"], "#666666")
+        colour = _tunnel_colour(t)
         weight = 6 if t["tunnel_id"] == selected_tunnel_id else 4
         opacity = 1.0 if t["tunnel_id"] == selected_tunnel_id else 0.7
 
@@ -319,7 +402,7 @@ def build_ingest_map(
         if len(a) >= 2:
             folium.PolyLine(
                 locations=a,
-                color=TUNNEL_COLOURS.get(t["tunnel_id"], "#999999"),
+                color=_tunnel_colour(t),
                 weight=2,
                 opacity=0.35,
                 dash_array="4 8",
@@ -328,7 +411,7 @@ def build_ingest_map(
 
     # Selected tunnel (prominent)
     if len(alignment) >= 2:
-        colour = TUNNEL_COLOURS.get(selected_tunnel_id, "#1f78b4")
+        colour = _tunnel_colour(selected)
         folium.PolyLine(
             locations=alignment,
             color=colour,
@@ -512,7 +595,7 @@ def build_confirmation_map(
         if len(a) >= 2:
             folium.PolyLine(
                 locations=a,
-                color=TUNNEL_COLOURS.get(t["tunnel_id"], "#999999"),
+                color=_tunnel_colour(t),
                 weight=2,
                 opacity=0.30,
                 dash_array="4 8",
@@ -521,7 +604,7 @@ def build_confirmation_map(
 
     # Selected tunnel (prominent)
     if len(alignment) >= 2:
-        colour = TUNNEL_COLOURS.get(tunnel_id, "#1f78b4")
+        colour = _tunnel_colour(selected)
         folium.PolyLine(
             locations=alignment,
             color=colour,

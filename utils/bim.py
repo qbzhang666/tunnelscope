@@ -46,7 +46,7 @@ def load_bim_as_built() -> Dict[str, Any]:
     if not BIM_FILE.exists():
         return {"_meta": {}, "tunnels": {}}
     try:
-        with open(BIM_FILE) as f:
+        with open(BIM_FILE, encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return {"_meta": {}, "tunnels": {}}

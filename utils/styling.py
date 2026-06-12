@@ -24,11 +24,13 @@ def apply_custom_css():
         max-width: 1500px;
     }
 
-    /* Sidebar */
+    /* Sidebar — style only the user-content area. Touching the nav's
+       elements (stSidebarNav) breaks its item-height math and causes
+       overlapping/duplicated page labels. */
     [data-testid="stSidebar"] {
         background: #F5F4EF;
     }
-    [data-testid="stSidebar"] * {
+    [data-testid="stSidebarUserContent"] * {
         font-size: 17px !important;
     }
 

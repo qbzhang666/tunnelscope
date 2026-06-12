@@ -31,8 +31,8 @@ from utils.ingest import (
     build_ingested_defect_id,
 )
 from utils.gis import list_tunnels, build_confirmation_map
+from utils.explainers import render_plain_guide
 
-st.set_page_config(page_title="Ingest", layout="wide")
 apply_custom_css()
 
 if "graph" not in st.session_state:
@@ -49,6 +49,12 @@ st.caption(
     "inspection report. After you've entered ring and chainage, the "
     "map below the form will show where the location projects to so "
     "you can verify before submitting."
+)
+
+render_plain_guide(
+    "Add one defect from a photo or report. Check the pre-filled "
+    "details, confirm the map location, press **Register defect** — it "
+    "then joins the Defect Register like any survey finding."
 )
 
 # -----------------------------------------------------------------------------
@@ -305,7 +311,7 @@ if input_route.startswith("Image"):
         # Show the image alongside the form
         col_img, col_form = st.columns([1, 2])
         with col_img:
-            st.image(uploaded, caption=uploaded.name, use_container_width=True)
+            st.image(uploaded, caption=uploaded.name, width="stretch")
 
         # ---- Local LVM inference (image route) ----
         if USE_LOCAL_LVM:

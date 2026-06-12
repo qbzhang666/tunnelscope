@@ -24,8 +24,8 @@ from utils.cv_to_cobie import (
     pixel_to_chainage,
 )
 from utils.styling import apply_custom_css
+from utils.explainers import render_plain_guide
 
-st.set_page_config(page_title="CV → COBie Bridge", layout="wide")
 apply_custom_css()
 
 st.title("CV → COBie bridge")
@@ -33,6 +33,12 @@ st.caption(
     "Demonstrates how structured computer-vision output (masks, bounding "
     "boxes, class labels) from a multimodal survey is converted to COBie "
     "spreadsheet rows through the defect semantic extraction layer."
+)
+
+render_plain_guide(
+    "Watch AI camera output become standard asset records in three "
+    "steps: locate → measure → file. Use the sample data and open a "
+    "mask below; the finished records appear at the bottom."
 )
 
 st.info(
@@ -187,7 +193,7 @@ cobie_row: {mask['id']}""", language=None)
         sheet_df = df[df["sheet"] == sheet].drop(columns=["sheet"])
         sheet_df = sheet_df.dropna(axis=1, how="all")
         st.markdown(f"**{sheet}** — {len(sheet_df)} row(s)")
-        st.dataframe(sheet_df, use_container_width=True, hide_index=True)
+        st.dataframe(sheet_df, width="stretch", hide_index=True)
 
     col1, col2 = st.columns(2)
     with col1:

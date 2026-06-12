@@ -1,10 +1,13 @@
 """
 Tunnel Digital Twin — Operator Dashboard
 =========================================
-Main Streamlit application entry point.
+Main Streamlit application entry point and page router.
 
-Run locally:
+Run locally (Windows, one command):
+    run_local.cmd          # sets up an isolated env on first run, then launches
+    # or, if your environment is already set up:
     streamlit run app.py
+    # See RUN_LOCAL.md for details.
 
 Deployed at:
     https://amandahuang-336-tunnel-dt2026-app-zmguxo.streamlit.app/
@@ -13,6 +16,12 @@ This is the human-facing interface for a serviceability-oriented
 multimodal tunnel maintenance digital twin. It queries a populated
 ontology (OWL/Turtle) through rdflib and presents defect records,
 FMEA chains, and prescribed interventions.
+
+Navigation uses st.navigation (MPA v2) so the sidebar shows the pages
+in numbered workflow order, grouped by purpose — the page list itself
+tells a first-time user where to start. The files in pages/ remain
+standalone-runnable (e.g. for AppTest), but their sidebar order,
+labels and icons are defined here.
 
 Architecture:
     Protégé (authoring)
@@ -28,10 +37,17 @@ Architecture:
 """
 
 import sys
+
+import pandas as pd
 import streamlit as st
 
 from utils.ontology_loader import load_ontology, load_defects
 from utils.styling import apply_custom_css
+from utils.gis import list_tunnels
+from utils.cost_model import effective_cost
+from utils.explainers import (
+    render_logic_pipeline, render_glossary, render_user_workflow,
+)
 
 # -----------------------------------------------------------------------------
 # Page configuration — MUST be the first Streamlit call
@@ -54,6 +70,7 @@ st.set_page_config(
 
 apply_custom_css()
 
+
 # -----------------------------------------------------------------------------
 # Session state initialisation
 # -----------------------------------------------------------------------------
@@ -62,7 +79,7 @@ def init_session_state():
     defaults = {
         "ontology_loaded": False,
         "selected_defect_id": None,
-        "current_tunnel": "Tunnel_A",
+        "current_tunnel": "Tunnel A",
         "graph": None,
         "defects": [],
     }
@@ -97,57 +114,50 @@ def ensure_ontology_loaded():
 
 
 # -----------------------------------------------------------------------------
-# Sidebar — global navigation, tunnel selector, ontology status
+# Sidebar — compact: tunnel selector plus one collapsed System expander.
+# Page navigation itself is rendered by st.navigation above this content.
 # -----------------------------------------------------------------------------
 def render_sidebar():
     with st.sidebar:
-        st.markdown("### 🛣️ Tunnel DT")
-        st.caption("Serviceability-Oriented Digital Twin")
-        st.divider()
+        st.markdown("#### 🛣️ Tunnel DT")
+        st.caption("Serviceability-oriented digital twin")
 
+        # Built-in tunnels plus any the user registered on Tunnel Setup.
+        tunnel_labels = [t["label"] for t in list_tunnels()] or ["Tunnel A"]
         tunnel_choice = st.selectbox(
             "Active tunnel",
-            options=["Tunnel_A", "Tunnel_B", "Tunnel_C"],
+            options=tunnel_labels,
             index=0,
             help=(
-                "Select which tunnel's data to display. "
-                "Tunnel A is fully populated; B and C are placeholders."
+                "Tunnel A carries the full demo dataset. "
+                "Add your own tunnel on the **Tunnel Setup** page."
             ),
         )
         st.session_state.current_tunnel = tunnel_choice
 
-        st.divider()
-
-        # Ontology status indicator
-        st.markdown("**Ontology status**")
-        if st.session_state.ontology_loaded and st.session_state.graph is not None:
-            n_triples = len(st.session_state.graph)
-            n_defects = len(st.session_state.defects)
-            st.success(f"✓ Loaded — {n_triples} triples")
-            st.caption(f"{n_defects} defect instances")
-        else:
-            st.warning("Not loaded")
-
-        st.divider()
-
-        # Reload button (useful for testing)
-        if st.button("Reload ontology", use_container_width=True):
-            st.session_state.ontology_loaded = False
-            st.cache_data.clear()
-            st.cache_resource.clear()
-            st.rerun()
-
-        st.divider()
-        st.caption(
-            "Built for the paper *Serviceability-oriented Multimodal "
-            "Data Integration for Tunnel Maintenance Digital Twins in "
-            "the Australian Context*."
-        )
-
-        # System info collapsed by default
-        with st.expander("System info", expanded=False):
-            st.caption(f"Python: `{sys.version.split()[0]}`")
-            st.caption(f"Streamlit: `{st.__version__}`")
+        with st.expander("System", expanded=False):
+            if st.session_state.ontology_loaded and st.session_state.graph is not None:
+                st.caption(
+                    f"✓ Ontology loaded — "
+                    f"{len(st.session_state.graph):,} triples · "
+                    f"{len(st.session_state.defects)} defect instances"
+                )
+            else:
+                st.caption("Ontology not loaded")
+            if st.button("Reload ontology", width="stretch"):
+                st.session_state.ontology_loaded = False
+                st.cache_data.clear()
+                st.cache_resource.clear()
+                st.rerun()
+            st.caption(
+                f"Python {sys.version.split()[0]} · "
+                f"Streamlit {st.__version__}"
+            )
+            st.caption(
+                "Companion app to the paper *Serviceability-oriented "
+                "Multimodal Data Integration for Tunnel Maintenance "
+                "Digital Twins in the Australian Context*."
+            )
 
 
 # -----------------------------------------------------------------------------
@@ -159,6 +169,15 @@ def render_overview():
         "Defects detected, prioritised, and traced to FMEA chains. "
         "Data as of inspection campaign 2024-03-15."
     )
+
+    # Executive layer — usage steps and workflow first, the system's
+    # logic and glossary in the second tab.
+    tab_use, tab_logic = st.tabs(["🧭 How to use", "⚙️ How it works"])
+    with tab_use:
+        render_user_workflow()
+    with tab_logic:
+        render_logic_pipeline()
+        render_glossary()
 
     defects = st.session_state.defects
     if not defects:
@@ -174,7 +193,9 @@ def render_overview():
     completeness_ok = [
         d for d in active_defects if d.get("completeness_score", 0) >= 0.75
     ]
-    total_cost = sum(d.get("estimated_cost_aud", 0) for d in active_defects)
+    # Engineer-recorded estimates where they exist, unit-rate model
+    # estimates otherwise — so the exposure number has no silent $0 gaps.
+    total_cost = sum(effective_cost(d)[0] for d in active_defects)
 
     # -----------------------------------------------------------------------------
     # Top metrics row
@@ -182,17 +203,17 @@ def render_overview():
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric(
-            "Active defects",
+            "Open defects",
             len(active_defects),
-            help="Defects currently requiring tracking or intervention.",
+            help="Issues currently tracked or awaiting repair.",
         )
     with col2:
         st.metric(
-            "High priority",
+            "Need action ≤ 30 days",
             len(high_priority),
             delta=f"{len(high_priority)} need attention" if high_priority else None,
             delta_color="inverse",
-            help="Action required within 30 days.",
+            help="HIGH-priority defects.",
         )
     with col3:
         coverage_pct = (
@@ -201,68 +222,69 @@ def render_overview():
             else 0
         )
         st.metric(
-            "FMEA coverage",
+            "Diagnosis confidence",
             f"{coverage_pct}%",
-            help="Defects with diagnostic completeness ≥ 3/4.",
+            help="Open defects with ≥3 of 4 sensing sources agreeing "
+                 "(FMEA coverage).",
         )
     with col4:
         st.metric(
-            "Est. cost",
+            "12-month cost exposure",
             f"${total_cost / 1e6:.2f}M",
-            help="Estimated intervention cost over the next 12 months.",
+            help="Estimated cost of prescribed repairs — engineer "
+                 "estimates where recorded, unit-rate model otherwise.",
+        )
+
+    # One-sentence interpretation so the numbers need no translation.
+    if high_priority:
+        st.warning(
+            f"**Bottom line:** {len(high_priority)} of "
+            f"{len(active_defects)} open defects need action within "
+            f"30 days — est. ${total_cost / 1e6:.2f}M. See the "
+            f"**Defect Register**."
+        )
+    else:
+        st.success(
+            f"**Bottom line:** nothing requires action within 30 days. "
+            f"{len(active_defects)} defects tracked — est. exposure "
+            f"${total_cost / 1e6:.2f}M."
         )
 
     st.divider()
 
     # -----------------------------------------------------------------------------
-    # Navigation hint
+    # Section coverage — one compact row
     # -----------------------------------------------------------------------------
-    st.info(
-        "**Navigate using the sidebar Pages menu:** "
-        "**Defect Register** for a ranked list, "
-        "**Defect Detail** for the full FMEA chain of a single defect, "
-        "**SPARQL Console** for direct queries, "
-        "**CV → COBie Bridge** for the defect semantic extraction pipeline, "
-        "**Ontology Browser** to inspect the schema."
+    st.subheader("Survey coverage by tunnel section")
+    st.caption(
+        "🟢 well surveyed · 🟡 partial · 🔴 needs follow-up survey — "
+        "coverage = rings with evidence from ≥3 of 4 sensing sources."
     )
-
-    # -----------------------------------------------------------------------------
-    # Section coverage
-    # -----------------------------------------------------------------------------
-    st.subheader("Multimodal coverage by tunnel section")
 
     sections = [
-        ("Section 1 (K248+500 – K249+200)", 95, "🟢"),
-        ("Section 2 (K249+200 – K249+900)", 78, "🟡"),
-        ("Section 3 (K249+900 – K250+600)", 52, "🔴"),
-        ("Section 4 (K250+600 – K251+300)", 67, "🟡"),
+        ("Section 1", "K248+500 – K249+200", 95, "🟢"),
+        ("Section 2", "K249+200 – K249+900", 78, "🟡"),
+        ("Section 3", "K249+900 – K250+600", 52, "🔴"),
+        ("Section 4", "K250+600 – K251+300", 67, "🟡"),
     ]
 
-    for label, pct, icon in sections:
-        col_a, col_b, col_c = st.columns([4, 8, 1])
-        with col_a:
-            st.write(f"{icon} {label}")
-        with col_b:
+    cols = st.columns(4)
+    for col, (name, span, pct, icon) in zip(cols, sections):
+        with col:
+            st.markdown(f"{icon} **{name}** · {pct}%")
             st.progress(pct / 100)
-        with col_c:
-            st.write(f"**{pct}%**")
-
-    st.caption(
-        "Coverage = percentage of ring assets with evidence from at least "
-        "three of four modalities (RGB, RGBD, Thermal, GPR). Low-coverage "
-        "sections are candidates for targeted follow-up survey."
-    )
+            st.caption(span)
 
     st.divider()
 
     # -----------------------------------------------------------------------------
-    # Top priority defects preview
+    # Top priority defects — compact table
     # -----------------------------------------------------------------------------
     st.subheader("Top priority defects")
     st.caption(
-        "Ranked by condition state and diagnostic completeness. "
-        "View the **Defect Register** for the full list, "
-        "or the **Defect Detail** page for full FMEA chains."
+        "Five most urgent, ranked by condition and evidence strength. "
+        "Evidence 4/4 = corroborated by every applicable source. "
+        "Full list: **Defect Register**."
     )
 
     top_defects = sorted(
@@ -277,61 +299,85 @@ def render_overview():
         st.info("No high priority defects currently identified.")
         return
 
+    rows = []
     for d in top_defects:
-        with st.container(border=True):
-            col1, col2, col3, col4, col5 = st.columns([1.2, 4, 1, 1, 1])
-            with col1:
-                st.code(d["defect_id"], language=None)
-            with col2:
-                st.markdown(f"**{d['description']}**")
-                st.caption(
-                    f"Ring {d['ring_id']} · K{d['chainage_m']:.0f}m · {d['position']}"
-                )
-            with col3:
-                score = d.get("completeness_score", 0)
-                score_frac = f"{int(score * 4)}/4"
-                st.metric(
-                    "Completeness",
-                    score_frac,
-                    label_visibility="collapsed",
-                )
-            with col4:
-                st.markdown(f":red[**{d.get('priority', '—')}**]")
-            with col5:
-                cost = d.get("estimated_cost_aud", 0)
-                if cost:
-                    st.write(f"${cost:,}")
-                else:
-                    st.write("—")
+        cost, basis = effective_cost(d)
+        rows.append({
+            "ID": d["defect_id"],
+            "Defect": d["description"],
+            "Where": f"Ring {d['ring_id']} · K{d['chainage_m']:.0f}m · "
+                     f"{d.get('position', '—')}",
+            "Evidence": f"{int(d.get('completeness_score', 0) * 4)}/4",
+            "Priority": d.get("priority", "—"),
+            "Est. cost (AUD)": cost,
+            "Basis": basis,
+        })
+    st.dataframe(
+        pd.DataFrame(rows),
+        hide_index=True,
+        width="stretch",
+        column_config={
+            "Est. cost (AUD)": st.column_config.NumberColumn(format="$%d"),
+        },
+    )
+    st.caption(
+        "Cost basis: **engineer** = recorded estimate · **modelled** = "
+        "unit-rate model (build-up on the Defect Detail page)."
+    )
 
 
 # -----------------------------------------------------------------------------
-# Main flow — wrapped in try/except for graceful error handling
+# Navigation — numbered workflow order, grouped by purpose. This replaces
+# Streamlit's automatic pages/ nav, so labels and grouping are explicit.
 # -----------------------------------------------------------------------------
-def main():
-    render_sidebar()
+# Groups follow the asset lifecycle: set up the tunnel, see its BIM
+# model, register and diagnose defects (with the standards one step
+# away), and finish with the report that summarises it all.
+nav = st.navigation({
+    "Start here": [
+        st.Page(render_overview, title="1 · Overview", icon="🏠",
+                url_path="overview", default=True),
+    ],
+    "Set up the asset": [
+        st.Page("pages/6_Tunnel_Setup.py",
+                title="2 · Tunnel Setup", icon="🛠️"),
+        st.Page("pages/7_BIM_3D_Viewer.py",
+                title="3 · 3D Tunnel (BIM)", icon="🧊"),
+    ],
+    "Inspect & diagnose": [
+        st.Page("pages/0_Ingest.py",
+                title="4 · Ingest a finding", icon="📤"),
+        st.Page("pages/1_Defect_Register.py",
+                title="5 · Defect Register", icon="🗺️"),
+        st.Page("pages/2_Defect_Detail.py",
+                title="6 · Defect Detail", icon="📋"),
+        st.Page("pages/9_Standards_Library.py",
+                title="7 · Standards Library", icon="📚"),
+    ],
+    "Specialists": [
+        st.Page("pages/3_SPARQL_Console.py", title="SPARQL Console", icon="🔎"),
+        st.Page("pages/4_CV_to_COBie_Bridge.py",
+                title="CV → COBie Bridge", icon="🌉"),
+        st.Page("pages/5_Ontology_Browser.py",
+                title="Ontology Browser", icon="🧩"),
+    ],
+    "Final step": [
+        st.Page("pages/8_Report.py", title="8 · Report (PDF)", icon="📄"),
+    ],
+})
 
-    if not ensure_ontology_loaded():
-        st.stop()
+render_sidebar()
 
-    render_overview()
+if not ensure_ontology_loaded():
+    st.stop()
 
-
-if __name__ == "__main__":
-    try:
-        main()
-    except Exception as exc:
-        st.error("⚠️ The dashboard encountered an unexpected error.")
-        st.exception(exc)
-        st.markdown("---")
-        st.caption(
-            "If this persists, please report the issue at "
-            "[GitHub Issues](https://github.com/amandahuang-336/tunnel-dt2026/issues)."
-        )
-else:
-    # Streamlit imports the module; run main() directly
-    try:
-        main()
-    except Exception as exc:
-        st.error("⚠️ The dashboard encountered an unexpected error.")
-        st.exception(exc)
+try:
+    nav.run()
+except Exception as exc:
+    st.error("⚠️ The dashboard encountered an unexpected error.")
+    st.exception(exc)
+    st.markdown("---")
+    st.caption(
+        "If this persists, please report the issue at "
+        "[GitHub Issues](https://github.com/amandahuang-336/tunnel-dt2026/issues)."
+    )

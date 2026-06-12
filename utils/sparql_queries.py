@@ -33,7 +33,7 @@ PREFIX owl:  <http://www.w3.org/2002/07/owl#>
 def query_all_defects_by_ring(ring_id: int) -> str:
     """List defects at a specific ring, traversing the subclass hierarchy."""
     return PREFIX_BLOCK + f"""
-    SELECT ?defect ?type ?severity ?priority
+    SELECT DISTINCT ?defect ?type ?severity ?priority
     WHERE {{
         ?defect rdf:type/rdfs:subClassOf* tun:DefectCondition ;
                 tun:atRingID {ring_id} .
@@ -46,11 +46,18 @@ def query_all_defects_by_ring(ring_id: int) -> str:
 
 
 def query_all_defects() -> str:
-    """List every defect, regardless of ring. Useful as a sanity check."""
+    """List every defect, regardless of ring. Useful as a sanity check.
+
+    The two FILTER NOT EXISTS clauses exclude TBox class nodes, which
+    otherwise match the property path once the OWL 2 RL closure makes
+    rdfs:subClassOf reflexive (same fix as Rev 11b in the loader).
+    """
     return PREFIX_BLOCK + """
-    SELECT ?defect ?type ?ring ?priority
+    SELECT DISTINCT ?defect ?type ?ring ?priority
     WHERE {
         ?defect rdf:type/rdfs:subClassOf* tun:DefectCondition .
+        FILTER NOT EXISTS { ?defect rdf:type owl:Class . }
+        FILTER NOT EXISTS { ?defect rdf:type rdfs:Class . }
         OPTIONAL { ?defect tun:hasType ?type . }
         OPTIONAL { ?defect tun:atRingID ?ring . }
         OPTIONAL { ?defect tun:hasPriority ?priority . }
@@ -75,7 +82,7 @@ def query_completeness_score(defect_id: str) -> str:
 
 def query_high_priority_defects() -> str:
     return PREFIX_BLOCK + """
-    SELECT ?defect ?ring ?chainage ?type ?priority ?cost
+    SELECT DISTINCT ?defect ?ring ?chainage ?type ?priority ?cost
     WHERE {
         ?defect rdf:type/rdfs:subClassOf* tun:DefectCondition ;
                 tun:hasPriority "HIGH" .
@@ -111,7 +118,7 @@ def query_fmea_chain_for_defect(defect_id: str) -> str:
 
 def query_modality_coverage_stats() -> str:
     return PREFIX_BLOCK + """
-    SELECT ?modality (COUNT(?defect) AS ?defectCount)
+    SELECT ?modality (COUNT(DISTINCT ?defect) AS ?defectCount)
     WHERE {
         ?defect rdf:type/rdfs:subClassOf* tun:DefectCondition ;
                 tun:detectedBy ?modality .
@@ -122,11 +129,18 @@ def query_modality_coverage_stats() -> str:
 
 
 def query_defects_missing_cause_level() -> str:
-    """Find defects with incomplete FMEA — missing cause-level evidence."""
+    """Find defects with incomplete FMEA — missing cause-level evidence.
+
+    Class nodes are excluded for the same Rev 11b reason as in
+    query_all_defects — they have no hasPotentialCause, so without the
+    filters every TBox class would appear as a 'defect missing cause'.
+    """
     return PREFIX_BLOCK + """
-    SELECT ?defect ?ring ?type
+    SELECT DISTINCT ?defect ?ring ?type
     WHERE {
         ?defect rdf:type/rdfs:subClassOf* tun:DefectCondition .
+        FILTER NOT EXISTS { ?defect rdf:type owl:Class . }
+        FILTER NOT EXISTS { ?defect rdf:type rdfs:Class . }
         OPTIONAL { ?defect tun:atRingID ?ring . }
         OPTIONAL { ?defect tun:hasType ?type . }
         FILTER NOT EXISTS {

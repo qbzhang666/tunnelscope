@@ -55,7 +55,7 @@ def load_geological_context() -> Dict[str, Any]:
     if not GEO_FILE.exists():
         return {"_meta": {}, "tunnels": {}}
     try:
-        with open(GEO_FILE) as f:
+        with open(GEO_FILE, encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return {"_meta": {}, "tunnels": {}}

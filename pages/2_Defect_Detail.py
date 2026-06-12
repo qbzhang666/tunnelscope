@@ -54,8 +54,9 @@ from utils.geology import (
     get_geology_cause_caveat,
 )
 from utils.styling import apply_custom_css
+from utils.explainers import render_plain_guide
+from utils.cost_model import estimate_defect_cost
 
-st.set_page_config(page_title="Defect Detail", layout="wide")
 apply_custom_css()
 
 if "graph" not in st.session_state:
@@ -187,6 +188,12 @@ st.caption(
     "defect. Pick a defect from the dropdown below."
 )
 
+render_plain_guide(
+    "One defect's full case file: evidence → cause → prescribed repair "
+    "with cost, deadline and standard. Fully traceable for sign-off — "
+    "generate a work order at the bottom."
+)
+
 defects = st.session_state.defects
 defect_ids = [d["defect_id"] for d in defects]
 
@@ -246,12 +253,35 @@ col1, col2, col3, col4 = st.columns(4)
 with col1:
     st.metric("Defect type", defect["defect_type"])
 with col2:
-    st.metric("Priority", defect.get("priority", "—"))
+    st.metric(
+        "Priority",
+        defect.get("priority", "—"),
+        help="Rule-based (AASHTO/Austroads coding): active water "
+             "(GS/F) or deep spalling (S-3/S-4) → HIGH, act ≤ 30 days; "
+             "S-2 or damp (M) → MEDIUM; else LOW. Operators can "
+             "override at ingest.",
+    )
 with col3:
     st.metric("Confidence", tier["label"])
 with col4:
-    cost = defect.get("estimated_cost_aud", 0)
-    st.metric("Est. cost", f"${cost:,}" if cost else "Pending")
+    cost_estimate = estimate_defect_cost(defect)
+    recorded_cost = defect.get("estimated_cost_aud", 0)
+    if recorded_cost:
+        st.metric(
+            "Est. cost",
+            f"${recorded_cost:,}",
+            help="Engineer-recorded estimate. The unit-rate model "
+                 "cross-checks it — see 'Cost build-up' below.",
+        )
+    else:
+        st.metric(
+            "Est. cost",
+            f"${cost_estimate['expected']:,.0f}",
+            delta="modelled",
+            delta_color="off",
+            help="No engineer estimate on file — unit-rate model figure "
+                 "shown. Full build-up and range below.",
+        )
 
 if tier["tier"] == "HIGH":
     st.success(f"**{tier['label']}** — {tier['action']}")
@@ -343,6 +373,10 @@ with col2:
 # -----------------------------------------------------------------------------
 st.divider()
 st.subheader("FMEA reasoning chain")
+st.caption(
+    "Top to bottom: part → mechanism → observation → measurements → "
+    "root cause → action trigger. Grey boxes show each fact's source."
+)
 
 # Resolve BIM context once. Drives both the inline badge on the Component
 # step and the expandable as-built section.
@@ -741,6 +775,47 @@ for i, iv in enumerate(interventions, 1):
 deadline = defect.get("deadline_days")
 if deadline:
     st.warning(f"Complete within **{deadline} days** of approval.")
+
+# -----------------------------------------------------------------------------
+# Cost build-up — transparent unit-rate model, every line shown
+# -----------------------------------------------------------------------------
+st.divider()
+st.subheader("Cost build-up (modelled)")
+st.caption(f"**Method:** {cost_estimate['method']}")
+
+_rows = "\n".join(
+    f"| {label} | ${amount:,.0f} |"
+    for label, amount in cost_estimate["lines"]
+)
+st.markdown(
+    "| Item | AUD |\n|---|---:|\n" + _rows
+    + f"\n| **Expected total** | **${cost_estimate['expected']:,.0f}** |"
+)
+st.caption(
+    f"Contingency band ±{cost_estimate['band_pct'] * 100:.0f}% "
+    f"(evidence completeness "
+    f"{cost_estimate['completeness'] * 4:.0f}/4): "
+    f"**${cost_estimate['low']:,.0f} – ${cost_estimate['high']:,.0f}**."
+)
+
+if cost_estimate["recorded"]:
+    if cost_estimate["within_band"]:
+        st.success(
+            f"Engineer estimate ${cost_estimate['recorded']:,.0f} sits "
+            f"**inside** the model band — consistent."
+        )
+    else:
+        st.warning(
+            f"Engineer estimate ${cost_estimate['recorded']:,.0f} sits "
+            f"**outside** the model band "
+            f"(${cost_estimate['low']:,.0f} – "
+            f"${cost_estimate['high']:,.0f}) — review scope assumptions "
+            f"(e.g. mobilisation shared across batched repairs)."
+        )
+
+with st.expander("Model assumptions"):
+    for a in cost_estimate["assumptions"]:
+        st.markdown(f"- {a}")
 
 # -----------------------------------------------------------------------------
 # Actions

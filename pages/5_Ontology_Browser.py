@@ -11,8 +11,8 @@ from rdflib import RDF, RDFS, OWL
 
 from utils.ontology_loader import load_ontology, TUN
 from utils.styling import apply_custom_css
+from utils.explainers import render_plain_guide
 
-st.set_page_config(page_title="Ontology Browser", layout="wide")
 apply_custom_css()
 
 if "graph" not in st.session_state:
@@ -25,6 +25,11 @@ st.caption(
     "Browse the class hierarchy, object properties, and axioms of the "
     "populated ontology. Useful for understanding the schema without "
     "opening Protégé."
+)
+
+render_plain_guide(
+    "The system's dictionary — every defect type, cause and repair it "
+    "reasons with. Curated engineering knowledge, not a black box."
 )
 
 # -----------------------------------------------------------------------------

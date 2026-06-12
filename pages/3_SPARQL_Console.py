@@ -12,8 +12,8 @@ REVISED:
 - Diagnostic queries that focus on the schema (TBox), which is always
   populated, in addition to instance queries (ABox) which may not be
   if defects are loaded from data/*.json.
-- use_container_width=True replaces width='stretch' (Streamlit < 1.49
-  compatibility on Cloud).
+- width='stretch' (Streamlit >= 1.49) is used for full-width tables;
+  the deprecated use_container_width parameter has been migrated.
 """
 
 import streamlit as st
@@ -22,8 +22,8 @@ import pandas as pd
 from utils.ontology_loader import load_ontology, load_defects
 from utils.sparql_queries import EXAMPLE_QUERIES
 from utils.styling import apply_custom_css
+from utils.explainers import render_plain_guide
 
-st.set_page_config(page_title="SPARQL Console", layout="wide")
 apply_custom_css()
 
 if "graph" not in st.session_state:
@@ -35,6 +35,12 @@ st.caption(
     "Direct query interface to the populated ontology graph. Runs "
     "in-process via rdflib — in production this connects to Apache "
     "Jena Fuseki."
+)
+
+render_plain_guide(
+    "Ask the knowledge base direct questions — any number in the app "
+    "can be verified here. Pick a question, press **Run**, read the "
+    "table. The code stays tucked away unless you want it."
 )
 
 # -----------------------------------------------------------------------------
@@ -167,21 +173,85 @@ ORDER BY DESC(?count)
 }
 
 # -----------------------------------------------------------------------------
-# Example query selector
+# Question picker — plain-language labels mapped to the underlying SPARQL.
+# The raw code stays available (and editable) in a collapsed expander, so
+# non-specialists never have to read it.
 # -----------------------------------------------------------------------------
-all_examples = {**DIAGNOSTIC_QUERIES, **EXAMPLE_QUERIES}
+WRITE_MY_OWN = "(Write my own SPARQL)"
 
-example_name = st.selectbox(
-    "Load example query",
-    options=["(Write my own)"] + list(all_examples.keys()),
-    index=1,
-    help="Schema queries (top of list) work against any loaded ontology. "
-         "Instance queries require defects to be materialised in the graph.",
+QUESTION_CATALOGUE = {
+    # label shown to the user: (sparql, one-line plain meaning)
+    "List every recorded defect": (
+        EXAMPLE_QUERIES["All defects (subclass-aware)"],
+        "Every defect in the knowledge base, with its type, ring and "
+        "priority.",
+    ),
+    "Which defects are HIGH priority?": (
+        EXAMPLE_QUERIES["High priority defects"],
+        "The defects needing action within 30 days, with location and "
+        "estimated cost.",
+    ),
+    "What defects are at Ring 1247?": (
+        EXAMPLE_QUERIES["All defects at Ring 1247"],
+        "Everything recorded at one specific tunnel ring.",
+    ),
+    "Show the cause-and-effect chain for defect D-1247-L": (
+        EXAMPLE_QUERIES["FMEA chain for D-1247-L"],
+        "One defect's FMEA links: component, mechanism, evidence, cause "
+        "and repair.",
+    ),
+    "How many defects has each sensor type detected?": (
+        EXAMPLE_QUERIES["Modality coverage stats"],
+        "Defect counts per sensing source (photo, depth, thermal, radar).",
+    ),
+    "Which defects still lack root-cause evidence?": (
+        EXAMPLE_QUERIES["Defects missing cause-level evidence"],
+        "Defects whose FMEA chain is incomplete — candidates for "
+        "follow-up survey.",
+    ),
+    "Which standards do the prescribed repairs come from?": (
+        EXAMPLE_QUERIES["Interventions per standard"],
+        "Repair counts per source standard (Austroads, AASHTO, ...).",
+    ),
+    "Which tunnel rings have recorded defects?": (
+        DIAGNOSTIC_QUERIES["Instances — distinct ring IDs in the graph"],
+        "The distinct ring numbers that appear in the defect records.",
+    ),
+    "How many records of each type?": (
+        DIAGNOSTIC_QUERIES["Instances — count by class (ABox)"],
+        "Record counts per concept type.",
+    ),
+    "What concept types does the system know?": (
+        DIAGNOSTIC_QUERIES["Schema — list all OWL classes"],
+        "The knowledge base's vocabulary: every defect, cause and repair "
+        "concept, with descriptions.",
+    ),
+    "How do the concepts relate to each other?": (
+        DIAGNOSTIC_QUERIES["Schema — list all object properties (with domain/range)"],
+        "Every relationship type (e.g. 'has cause', 'detected by') and "
+        "what it connects.",
+    ),
+    "Show the concept family tree": (
+        DIAGNOSTIC_QUERIES["Schema — class hierarchy (subclass relationships)"],
+        "Which concept sits under which (e.g. Cracks is a kind of "
+        "DefectCondition).",
+    ),
+    "Which relationship types are most used in the data?": (
+        DIAGNOSTIC_QUERIES["Schema — count triples by predicate"],
+        "A usage count of every relationship type — a health check of "
+        "the graph.",
+    ),
+}
+
+question = st.selectbox(
+    "Pick a question to ask the knowledge base",
+    options=list(QUESTION_CATALOGUE.keys()) + [WRITE_MY_OWN],
+    index=0,
+    help="Each option is a ready-made query. The SPARQL it runs is in "
+         "the expander below — visible if you want it, ignorable if not.",
 )
 
-if example_name != "(Write my own)":
-    default_query = all_examples[example_name]
-else:
+if question == WRITE_MY_OWN:
     default_query = """PREFIX tun: <http://w3id.org/tunnel-dt/ontology/v1.2#>
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
@@ -193,16 +263,26 @@ SELECT ?class WHERE {
 }
 LIMIT 20
 """
+else:
+    default_query, _meaning = QUESTION_CATALOGUE[question]
+    st.caption(f"❓ **Asks:** {_meaning}")
 
 # -----------------------------------------------------------------------------
-# Query editor
+# Query editor — collapsed unless the user is writing their own
 # -----------------------------------------------------------------------------
-query = st.text_area(
-    "SPARQL query",
-    value=default_query,
-    height=260,
-    help="Edit the query above and click Run.",
-)
+with st.expander("✏️ SPARQL code (view or edit — for specialists)",
+                 expanded=(question == WRITE_MY_OWN)):
+    st.caption(
+        "SPARQL is the knowledge base's query language — like SQL for "
+        "databases. The `PREFIX` lines are address shorthand; the "
+        "question itself is the `SELECT ... WHERE { ... }` part."
+    )
+    query = st.text_area(
+        "SPARQL query",
+        value=default_query,
+        height=260,
+        help="Edit freely and click Run query below.",
+    )
 
 col1, col2, _ = st.columns([1, 1, 6])
 with col1:
@@ -275,7 +355,7 @@ if run:
                         st.markdown(":grey[Graph is empty.]")
                     else:
                         st.dataframe(
-                            pred_df, use_container_width=True, hide_index=True
+                            pred_df, width="stretch", hide_index=True
                         )
                 except Exception as e:
                     st.markdown(f":grey[Diagnostic failed: {e}]")
@@ -293,13 +373,13 @@ if run:
                         st.markdown(":grey[No OWL classes in the graph.]")
                     else:
                         st.dataframe(
-                            cls_df, use_container_width=True, hide_index=True
+                            cls_df, width="stretch", hide_index=True
                         )
                 except Exception as e:
                     st.markdown(f":grey[Diagnostic failed: {e}]")
         else:
             st.success(f"Query returned **{len(df)} rows**.")
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.dataframe(df, width="stretch", hide_index=True)
 
             col1, col2 = st.columns(2)
             with col1:
