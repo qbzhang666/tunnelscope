@@ -38,13 +38,18 @@ and the UI shows a clear message — no crash.
 from __future__ import annotations
 
 import base64
+import io
 import json
+import re
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
 DEFAULT_ENDPOINT = "http://localhost:11434"
 DEFAULT_MODEL = "qwen2.5vl:7b"
+# Text model used for auto-extracting fields from inspection REPORTS.
+# Any locally-installed instruct model works; this is a sensible default.
+DEFAULT_TEXT_CLASSIFY_MODEL = "qwen3:8b"
 DEFAULT_TIMEOUT_S = 120  # generous — local models can be slow on CPU
 
 
@@ -252,3 +257,311 @@ DEFAULT_TEXT_PROMPT = (
     "Respond as a short structured list. Do NOT invent values that "
     "aren't in the text."
 )
+
+
+# =============================================================================
+# Automatic defect recognition — parse model output into the ingest form
+# =============================================================================
+# Unlike the manual functions above, these prompt the model for STRICT JSON
+# and parse it into the exact field values the ingest form expects, so the
+# form can be pre-filled automatically. A human still confirms before
+# registering — the model's output is a suggestion, never the final record.
+
+# Canonical option values (must match utils.ingest DEFECT_TYPE_OPTIONS /
+# POSITION_OPTIONS). Kept here so this module stays import-decoupled.
+_ALLOWED_DEFECT_TYPES = [
+    "Cracks", "Spalls", "LeakingJoints", "Efflorescence", "RebarCorrosion",
+    "Delamination", "Honeycombing", "ConstructionJointDefect", "Unclassified",
+]
+_ALLOWED_POSITIONS = [
+    "Crown", "Springline_L", "Springline_R", "Invert",
+    "Sidewall_L", "Sidewall_R",
+]
+
+CLASSIFY_IMAGE_PROMPT = (
+    "You are a tunnel-lining inspection assistant. Look at this single "
+    "photograph and classify the most prominent defect. Respond with ONLY "
+    "a JSON object — no markdown fences, no commentary — using EXACTLY "
+    "these keys:\n"
+    '{"defect_type": one of '
+    '["Cracks","Spalls","LeakingJoints","Efflorescence","RebarCorrosion",'
+    '"Delamination","Honeycombing","ConstructionJointDefect","Unclassified"], '
+    '"position": one of '
+    '["Crown","Springline_L","Springline_R","Invert","Sidewall_L",'
+    '"Sidewall_R","Unknown"], '
+    '"severity": one of ["low","medium","high"], '
+    '"moisture": one of ["dry","damp","wet","active_leak"], '
+    '"crack_width_mm": number or null, '
+    '"spall_depth_mm": number or null, '
+    '"area_cm2": number or null, '
+    '"confidence": number between 0 and 1, '
+    '"reasoning": one short sentence citing what you see}\n'
+    "Report ONLY what is visible. Use null for any measurement you cannot "
+    "estimate. Do not invent numbers."
+)
+
+CLASSIFY_TEXT_PROMPT = (
+    "You extract structured data from tunnel inspection reports. From the "
+    "report below, return ONLY a JSON object (no commentary) with EXACTLY "
+    "these keys:\n"
+    '{"defect_type": one of '
+    '["Cracks","Spalls","LeakingJoints","Efflorescence","RebarCorrosion",'
+    '"Delamination","Honeycombing","ConstructionJointDefect","Unclassified"], '
+    '"position": one of '
+    '["Crown","Springline_L","Springline_R","Invert","Sidewall_L",'
+    '"Sidewall_R","Unknown"], '
+    '"ring_id": integer or null, '
+    '"chainage_m": number or null, '
+    '"severity": one of ["low","medium","high"], '
+    '"moisture": one of ["dry","damp","wet","active_leak"], '
+    '"crack_width_mm": number or null, '
+    '"spall_depth_mm": number or null, '
+    '"area_cm2": number or null, '
+    '"confidence": number between 0 and 1, '
+    '"reasoning": one short sentence}\n'
+    "Use null for anything the report does not state. Do NOT invent values.\n"
+    "Report:\n---\n{text}\n---"
+)
+
+
+def _downscale_image(image_bytes: bytes, max_px: int = 1024,
+                     quality: int = 85) -> bytes:
+    """Shrink a large inspection photo before sending it to the model.
+
+    Vision models do not need 20+ megapixels; downscaling cuts inference
+    time and request size by an order of magnitude (a 22 MB JPEG becomes a
+    few hundred KB). Returns the original bytes unchanged on any failure.
+    """
+    try:
+        from PIL import Image
+        img = Image.open(io.BytesIO(image_bytes))
+        if img.mode not in ("RGB", "L"):
+            img = img.convert("RGB")
+        img.thumbnail((max_px, max_px))
+        out = io.BytesIO()
+        img.save(out, format="JPEG", quality=quality)
+        return out.getvalue()
+    except Exception:
+        return image_bytes
+
+
+def _extract_json(text: str) -> Optional[dict]:
+    """Pull the first JSON object out of a model response that may be
+    wrapped in ```json fences, padded with prose, or preceded by a
+    reasoning model's <think>…</think> block."""
+    if not text:
+        return None
+    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+    candidate = fenced.group(1) if fenced else None
+    if candidate is None:
+        start, end = text.find("{"), text.rfind("}")
+        if start != -1 and end > start:
+            candidate = text[start:end + 1]
+    if candidate is None:
+        return None
+    try:
+        obj = json.loads(candidate)
+    except json.JSONDecodeError:
+        return None
+    return obj if isinstance(obj, dict) else None
+
+
+def _norm_key(s: Any) -> str:
+    return re.sub(r"[\s_\-]+", "", str(s or "").strip().lower())
+
+
+_DEFECT_ALIASES = {
+    "crack": "Cracks", "cracks": "Cracks", "cracking": "Cracks",
+    "spall": "Spalls", "spalls": "Spalls", "spalling": "Spalls",
+    "leak": "LeakingJoints", "leakage": "LeakingJoints",
+    "leakingjoint": "LeakingJoints", "leakingjoints": "LeakingJoints",
+    "efflorescence": "Efflorescence", "staining": "Efflorescence",
+    "stain": "Efflorescence", "stains": "Efflorescence",
+    "rebarcorrosion": "RebarCorrosion", "corrosion": "RebarCorrosion",
+    "rust": "RebarCorrosion", "rebar": "RebarCorrosion",
+    "delamination": "Delamination", "delaminations": "Delamination",
+    "delam": "Delamination",
+    "honeycombing": "Honeycombing", "honeycomb": "Honeycombing",
+    "constructionjointdefect": "ConstructionJointDefect",
+    "constructionjoint": "ConstructionJointDefect",
+    "jointdefect": "ConstructionJointDefect",
+    "unclassified": "Unclassified", "other": "Unclassified",
+    "none": "Unclassified", "unknown": "Unclassified",
+}
+
+_POSITION_ALIASES = {
+    "crown": "Crown", "top": "Crown", "soffit": "Crown",
+    "invert": "Invert", "bottom": "Invert", "floor": "Invert",
+    "springlinel": "Springline_L", "springlineleft": "Springline_L",
+    "leftspringline": "Springline_L",
+    "springliner": "Springline_R", "springlineright": "Springline_R",
+    "rightspringline": "Springline_R",
+    "sidewalll": "Sidewall_L", "leftsidewall": "Sidewall_L",
+    "sidewallleft": "Sidewall_L", "left": "Sidewall_L",
+    "sidewallr": "Sidewall_R", "rightsidewall": "Sidewall_R",
+    "sidewallright": "Sidewall_R", "right": "Sidewall_R",
+}
+
+
+def _to_pos_float(v: Any) -> Optional[float]:
+    """Coerce to a positive float, else None (treats 0/negatives as absent)."""
+    try:
+        if v is None:
+            return None
+        f = float(v)
+        return f if f > 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _to_int(v: Any) -> Optional[int]:
+    try:
+        return int(float(v)) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _map_classification(parsed: dict) -> Dict[str, Any]:
+    """Map a parsed model JSON object onto the ingest form's field values.
+
+    `defect_type` always lands on a valid form option; `position` is None
+    when not recognised (the form then keeps its default). Priority follows
+    a transparent rule from severity + moisture.
+    """
+    defect_type = _DEFECT_ALIASES.get(
+        _norm_key(parsed.get("defect_type")), "Unclassified")
+    position = _POSITION_ALIASES.get(_norm_key(parsed.get("position")))
+
+    severity = str(parsed.get("severity", "")).strip().lower() or None
+    moisture = str(parsed.get("moisture", "")).strip().lower() or None
+    if moisture == "active_leak" or severity == "high":
+        priority = "HIGH"
+    elif severity == "medium" or moisture in ("wet", "damp"):
+        priority = "MEDIUM"
+    else:
+        priority = "LOW"
+
+    conf = _to_pos_float(parsed.get("confidence"))
+    if conf is not None and conf > 1:        # tolerate a 0–100 scale
+        conf = min(conf / 100.0, 1.0)
+
+    return {
+        "defect_type": defect_type,
+        "position": position if position in _ALLOWED_POSITIONS else None,
+        "severity": severity,
+        "moisture": moisture,
+        "priority": priority,
+        "ring_id": _to_int(parsed.get("ring_id")),
+        "chainage_m": _to_pos_float(parsed.get("chainage_m")),
+        "crack_width_mm": _to_pos_float(parsed.get("crack_width_mm")),
+        "spall_depth_mm": _to_pos_float(parsed.get("spall_depth_mm")),
+        "area_cm2": _to_pos_float(parsed.get("area_cm2")),
+        "confidence": conf,
+        "reasoning": str(parsed.get("reasoning", "")).strip(),
+    }
+
+
+def _ollama_generate(prompt: str, model: str, endpoint: str,
+                     timeout: float) -> Dict[str, Any]:
+    """Low-level /api/generate call that sends the prompt verbatim (no
+    str.format), so prompts containing literal JSON braces are safe."""
+    payload = {"model": model, "prompt": prompt, "stream": False}
+    try:
+        resp = requests.post(f"{endpoint}/api/generate",
+                             json=payload, timeout=timeout)
+    except requests.exceptions.ConnectionError as exc:
+        return {"ok": False, "text": "", "raw": None,
+                "error": f"Cannot reach Ollama at {endpoint} ({exc})"}
+    except requests.exceptions.Timeout:
+        return {"ok": False, "text": "", "raw": None,
+                "error": f"Timed out after {timeout}s."}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "text": "", "raw": None,
+                "error": f"Inference error: {exc}"}
+    if resp.status_code != 200:
+        return {"ok": False, "text": "", "raw": resp.text,
+                "error": f"HTTP {resp.status_code}: {resp.text[:300]}"}
+    try:
+        data = resp.json()
+    except json.JSONDecodeError:
+        return {"ok": False, "text": "", "raw": resp.text,
+                "error": "Response was not valid JSON."}
+    return {"ok": True, "text": data.get("response", "").strip(),
+            "raw": data, "error": None}
+
+
+def classify_defect_image(
+    image_bytes: bytes,
+    model: str = DEFAULT_MODEL,
+    endpoint: str = DEFAULT_ENDPOINT,
+    timeout: float = DEFAULT_TIMEOUT_S,
+) -> Dict[str, Any]:
+    """Recognise a defect in an inspection photo via a local vision model.
+
+    The image is downscaled, sent with a strict-JSON prompt, and the reply
+    parsed into ready-to-use form fields. A human must still confirm before
+    registering. Returns:
+        {ok, fields{...}, confidence, reasoning, raw, error}
+    """
+    if not image_bytes:
+        return {"ok": False, "error": "No image supplied.",
+                "fields": {}, "raw": ""}
+
+    inference = run_image_inference(
+        _downscale_image(image_bytes), CLASSIFY_IMAGE_PROMPT,
+        model, endpoint, timeout)
+    if not inference["ok"]:
+        return {"ok": False, "error": inference["error"],
+                "fields": {}, "raw": inference.get("raw")}
+
+    parsed = _extract_json(inference["text"])
+    if parsed is None:
+        return {"ok": False, "fields": {}, "raw": inference["text"],
+                "error": "The model did not return parseable JSON — read "
+                         "its raw output below and fill the form manually."}
+
+    fields = _map_classification(parsed)
+    return {"ok": True, "fields": fields,
+            "confidence": fields["confidence"],
+            "reasoning": fields["reasoning"],
+            "raw": inference["text"], "error": None}
+
+
+def classify_defect_text(
+    text: str,
+    model: str = DEFAULT_TEXT_CLASSIFY_MODEL,
+    endpoint: str = DEFAULT_ENDPOINT,
+    timeout: float = DEFAULT_TIMEOUT_S,
+) -> Dict[str, Any]:
+    """Extract structured defect fields from an inspection report via a
+    local text model. Same return shape as classify_defect_image."""
+    if not text or not text.strip():
+        return {"ok": False, "error": "No report text supplied.",
+                "fields": {}, "raw": ""}
+
+    inference = _ollama_generate(
+        CLASSIFY_TEXT_PROMPT.replace("{text}", text), model, endpoint, timeout)
+    if not inference["ok"]:
+        return {"ok": False, "error": inference["error"],
+                "fields": {}, "raw": inference.get("raw")}
+
+    parsed = _extract_json(inference["text"])
+    if parsed is None:
+        return {"ok": False, "fields": {}, "raw": inference["text"],
+                "error": "The model did not return parseable JSON — read "
+                         "its raw output below and fill the form manually."}
+
+    fields = _map_classification(parsed)
+    return {"ok": True, "fields": fields,
+            "confidence": fields["confidence"],
+            "reasoning": fields["reasoning"],
+            "raw": inference["text"], "error": None}
+
+
+def list_vision_models(endpoint: str = DEFAULT_ENDPOINT) -> List[str]:
+    """Locally-installed models that can probably see images (name heuristic:
+    vl / llava / vision / moondream / minicpm-v / bakllava / gemma3)."""
+    hints = ("vl", "llava", "vision", "moondream", "minicpm-v",
+             "bakllava", "gemma3")
+    return [m for m in list_local_models(endpoint)
+            if any(h in m.lower() for h in hints)]

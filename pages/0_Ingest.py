@@ -118,16 +118,20 @@ extraction_route = st.radio(
     options=[
         "Manual entry — I'll type the details myself",
         "Heuristic stub — let the app pre-fill what it can",
-        "Local LVM (Ollama / Qwen) — manual feedback loop",
+        "🤖 AI auto-classify (local model) — recognise & fill the form",
+        "☁️ Cloud VLM (Claude / OpenAI / Gemini) — no local model needed",
+        "Local LVM (Ollama / Qwen) — raw output, manual copy",
     ],
+    index=2,
     help=(
-        "Three options.  **Manual** is exactly what it sounds like.  "
-        "**Heuristic** uses filename keywords and text regex — fine for "
-        "a demo, not for production.  **Local LVM** sends the uploaded "
-        "image or text to a vision-capable model running on YOUR machine "
-        "via Ollama (e.g. Qwen2.5-VL).  The model's response is shown so "
-        "you can read it and manually copy useful fields into the form "
-        "below — the feedback loop is intentionally manual at this stage."
+        "**Manual** — type everything yourself.  "
+        "**Heuristic** — filename keywords / text regex (demo only).  "
+        "**AI auto-classify (local)** — a model on YOUR machine (Ollama) "
+        "reads the photo/report and pre-fills the form; nothing leaves "
+        "your computer.  **Cloud VLM** — same, but via a hosted API "
+        "(Anthropic / OpenAI / Google) for users without a local model; "
+        "needs an API key and sends the image/report to that provider.  "
+        "**Local LVM** — local model, raw output for manual copy."
     ),
 )
 
@@ -136,58 +140,69 @@ st.divider()
 # -----------------------------------------------------------------------------
 # Local LVM panel — only shown when that route is selected
 # -----------------------------------------------------------------------------
+USE_AI_CLASSIFY = "local model" in extraction_route
+USE_CLOUD_VLM = "Cloud VLM" in extraction_route
 USE_LOCAL_LVM = extraction_route.startswith("Local LVM")
+USE_LOCAL_MODEL = USE_AI_CLASSIFY or USE_LOCAL_LVM
+_IS_IMAGE_ROUTE = input_route.startswith("Image")
 
-if USE_LOCAL_LVM:
+if USE_LOCAL_MODEL:
     from utils.local_lvm import (
-        check_ollama_health, list_local_models,
-        DEFAULT_ENDPOINT, DEFAULT_MODEL,
+        check_ollama_health, list_local_models, list_vision_models,
+        DEFAULT_ENDPOINT, DEFAULT_MODEL, DEFAULT_TEXT_CLASSIFY_MODEL,
         DEFAULT_IMAGE_PROMPT, DEFAULT_TEXT_PROMPT,
     )
 
-    st.info(
-        "**Local LVM mode — how this works.**  Your image or report is "
-        "sent to a model server running on **your own machine** (Ollama, "
-        "by default at `http://localhost:11434`).  Nothing leaves your "
-        "machine; this is not a cloud inference call.  The model's "
-        "response appears below — read it, then manually type the "
-        "relevant fields into the form.  This is deliberate: silently "
-        "auto-parsing model output would create wrong metadata if the "
-        "model hallucinated, so a human-in-the-loop confirmation step "
-        "is required.  If Ollama is not running locally (e.g. on the "
-        "Streamlit Cloud deployment), this mode will not work — fall "
-        "back to Manual or Heuristic."
-    )
+    if USE_AI_CLASSIFY:
+        st.info(
+            f"**AI auto-classify — runs on YOUR machine.** The uploaded "
+            f"{'photo' if _IS_IMAGE_ROUTE else 'report'} is sent to a "
+            f"local Ollama model (default `http://localhost:11434`); "
+            f"nothing leaves your computer. The model's best guess "
+            f"**pre-fills the form** below — always review and correct it "
+            f"before registering, since models can be wrong. Needs Ollama "
+            f"running locally; on the cloud deployment, use Manual."
+        )
+    else:
+        st.info(
+            "**Local LVM mode.** Your image or report is sent to a model "
+            "on your own machine (Ollama). The raw response appears below "
+            "— read it and type the relevant fields into the form "
+            "yourself. Nothing leaves your machine."
+        )
 
     with st.expander("Local model configuration", expanded=True):
         col_cfg1, col_cfg2 = st.columns(2)
         with col_cfg1:
             ollama_endpoint = st.text_input(
                 "Ollama endpoint",
-                value=st.session_state.get(
-                    "ollama_endpoint", DEFAULT_ENDPOINT
-                ),
-                help="Default is the standard local Ollama address. "
-                     "Change only if you've configured Ollama on a "
-                     "different host/port.",
+                value=st.session_state.get("ollama_endpoint",
+                                           DEFAULT_ENDPOINT),
+                help="The standard local Ollama address. Change only if "
+                     "you run Ollama on a different host/port.",
             )
             st.session_state.ollama_endpoint = ollama_endpoint
         with col_cfg2:
-            # Try to populate the model selector from the live server
             health_ok, health_msg = check_ollama_health(ollama_endpoint)
             if health_ok:
-                models_available = list_local_models(ollama_endpoint)
-                if not models_available:
-                    models_available = [DEFAULT_MODEL]
+                models_available = list_local_models(ollama_endpoint) or \
+                    [DEFAULT_MODEL]
+                vision_models = list_vision_models(ollama_endpoint)
+                # Default to a vision model for photos, a text model for
+                # reports — so the right kind of model is pre-selected.
+                if _IS_IMAGE_ROUTE:
+                    preferred = next(iter(vision_models), DEFAULT_MODEL)
+                elif DEFAULT_TEXT_CLASSIFY_MODEL in models_available:
+                    preferred = DEFAULT_TEXT_CLASSIFY_MODEL
+                else:
+                    preferred = models_available[0]
                 ollama_model = st.selectbox(
-                    "Model",
-                    options=models_available,
-                    index=(models_available.index(DEFAULT_MODEL)
-                           if DEFAULT_MODEL in models_available else 0),
-                    help="Picked from the models installed in your "
-                         "local Ollama. For images, pick a "
-                         "vision-capable model (Qwen2.5-VL, LLaVA, "
-                         "Llama 3.2 Vision).",
+                    "Model", options=models_available,
+                    index=(models_available.index(preferred)
+                           if preferred in models_available else 0),
+                    help="For PHOTOS pick a vision model (name has 'vl', "
+                         "'llava', 'vision'); for REPORTS any instruct "
+                         "model works.",
                 )
             else:
                 ollama_model = st.text_input(
@@ -200,6 +215,86 @@ if USE_LOCAL_LVM:
             st.success(f"✓ {health_msg}")
         else:
             st.warning(f"⚠ {health_msg}")
+
+        # Photo recognition needs a vision model; guide the pull if absent.
+        if (USE_AI_CLASSIFY and _IS_IMAGE_ROUTE and health_ok
+                and not list_vision_models(ollama_endpoint)):
+            st.warning(
+                "No vision-capable model is installed in your local "
+                "Ollama, so **photo** recognition can't run yet. Pull one "
+                "in a terminal, e.g.\n\n"
+                "```\nollama pull qwen2.5vl:7b\n```\n"
+                "(or `llava:7b`, `moondream`). Report (text) "
+                "auto-classify already works with your text models."
+            )
+
+    st.divider()
+
+
+# -----------------------------------------------------------------------------
+# Cloud VLM panel — for users without a local model
+# -----------------------------------------------------------------------------
+if USE_CLOUD_VLM:
+    from utils.cloud_vlm import PROVIDERS, DEFAULT_MODELS, KEY_ENV_NAMES, \
+        api_key_from_env
+
+    st.info(
+        "**Cloud VLM mode.** The uploaded "
+        f"{'photo' if _IS_IMAGE_ROUTE else 'report'} is sent to a hosted "
+        "Vision-Language model to recognise the defect and pre-fill the "
+        "form. Use this if you don't run a local model. **Note:** unlike "
+        "the local options, the image/report **leaves your machine** for "
+        "the chosen provider's API. Needs an API key; review every "
+        "suggestion before registering."
+    )
+
+    with st.expander("Cloud provider & API key", expanded=True):
+        ccol1, ccol2 = st.columns(2)
+        with ccol1:
+            cloud_provider = st.selectbox("Provider", options=PROVIDERS)
+            st.session_state.cloud_provider = cloud_provider
+        with ccol2:
+            cloud_model = st.text_input(
+                "Model",
+                value=st.session_state.get(
+                    f"cloud_model_{cloud_provider}",
+                    DEFAULT_MODELS[cloud_provider]),
+                help="Editable — point at a newer or cheaper model if you "
+                     "like (e.g. a Haiku/Sonnet, gpt-4o-mini, "
+                     "gemini-1.5-flash).",
+            )
+            st.session_state[f"cloud_model_{cloud_provider}"] = cloud_model
+            st.session_state.cloud_model = cloud_model
+
+        # Resolve a key: Streamlit secrets → environment → manual entry.
+        secret_key = None
+        for nm in KEY_ENV_NAMES[cloud_provider]:
+            try:
+                if nm in st.secrets:
+                    secret_key = st.secrets[nm]
+                    break
+            except Exception:
+                pass
+        resolved = secret_key or api_key_from_env(cloud_provider)
+        if resolved:
+            st.success(
+                "✓ API key found in "
+                + ("Streamlit secrets" if secret_key else "the environment")
+                + " — no need to paste it."
+            )
+            st.session_state.cloud_key = resolved
+        else:
+            cloud_key = st.text_input(
+                f"{cloud_provider} API key",
+                value=st.session_state.get(f"cloud_key_{cloud_provider}", ""),
+                type="password",
+                help="Held only for this session — never written to disk. "
+                     "For a permanent setup add it to "
+                     "`.streamlit/secrets.toml` (git-ignored) as "
+                     f"`{KEY_ENV_NAMES[cloud_provider][0]} = \"...\"`.",
+            )
+            st.session_state[f"cloud_key_{cloud_provider}"] = cloud_key
+            st.session_state.cloud_key = cloud_key
 
     st.divider()
 
@@ -305,13 +400,129 @@ if input_route.startswith("Image"):
         help="A single image of the defect, in any common format.",
     )
 
-    prefilled_defect_type = "Unclassified"
+    # Form defaults, possibly overridden by heuristic or AI classification.
+    prefill = {
+        "defect_type": "Unclassified", "position": None,
+        "priority": "MEDIUM", "description": None,
+        "crack_width_mm": 0.0, "spall_depth_mm": 0.0, "area_cm2": 0.0,
+    }
 
     if uploaded is not None:
         # Show the image alongside the form
         col_img, col_form = st.columns([1, 2])
         with col_img:
             st.image(uploaded, caption=uploaded.name, width="stretch")
+
+        # ---- AI auto-classify (image route) — fills the form ----
+        if USE_AI_CLASSIFY:
+            with col_form:
+                st.markdown("**🤖 AI defect recognition**")
+                if st.button("Classify this photo with AI",
+                             key="run_ai_image", type="primary"):
+                    from utils.local_lvm import classify_defect_image
+                    with st.spinner(
+                        f"Running {st.session_state.ollama_model} on your "
+                        f"machine — a photo can take 30–120 s on CPU…"
+                    ):
+                        res = classify_defect_image(
+                            image_bytes=uploaded.getvalue(),
+                            model=st.session_state.ollama_model,
+                            endpoint=st.session_state.ollama_endpoint,
+                        )
+                    res["_file"] = uploaded.name
+                    st.session_state.ai_image_result = res
+
+                air = st.session_state.get("ai_image_result")
+                if air and air.get("_file") == uploaded.name:
+                    if air["ok"]:
+                        f = air["fields"]
+                        conf = f.get("confidence")
+                        st.success(
+                            "AI suggestion ready — the form below is "
+                            "pre-filled. **Review and correct before "
+                            "registering.**"
+                            + (f"  ·  confidence {conf * 100:.0f}%"
+                               if conf else "")
+                        )
+                        if f.get("reasoning"):
+                            st.caption(f"Model reasoning: _{f['reasoning']}_")
+                        prefill["defect_type"] = (f.get("defect_type")
+                                                  or "Unclassified")
+                        prefill["position"] = f.get("position")
+                        prefill["priority"] = f.get("priority") or "MEDIUM"
+                        prefill["crack_width_mm"] = f.get("crack_width_mm") or 0.0
+                        prefill["spall_depth_mm"] = f.get("spall_depth_mm") or 0.0
+                        prefill["area_cm2"] = f.get("area_cm2") or 0.0
+                        prefill["description"] = (
+                            f"{prefill['defect_type']} — AI-recognised from "
+                            f"{uploaded.name}")
+                        with st.expander("Raw model output"):
+                            st.code(air.get("raw") or "", language="json")
+                    else:
+                        st.error(
+                            f"AI classification failed: {air.get('error')}")
+                        if air.get("raw"):
+                            with st.expander("Raw model output"):
+                                st.code(air["raw"])
+                else:
+                    st.caption(
+                        "Press the button to let the local model read the "
+                        "photo and pre-fill the form for your review."
+                    )
+
+        # ---- Cloud VLM auto-classify (image route) — fills the form ----
+        if USE_CLOUD_VLM:
+            with col_form:
+                provider = st.session_state.get("cloud_provider", "")
+                st.markdown(f"**☁️ Cloud VLM — {provider}**")
+                if st.button("Classify this photo (cloud)",
+                             key="run_cloud_image", type="primary"):
+                    from utils.cloud_vlm import classify_defect_image_cloud
+                    with st.spinner(
+                        f"Sending the photo to {provider} "
+                        f"({st.session_state.get('cloud_model')})…"
+                    ):
+                        res = classify_defect_image_cloud(
+                            image_bytes=uploaded.getvalue(),
+                            provider=provider,
+                            api_key=st.session_state.get("cloud_key", ""),
+                            model=st.session_state.get("cloud_model"),
+                        )
+                    res["_file"] = uploaded.name
+                    st.session_state.cloud_image_result = res
+
+                air = st.session_state.get("cloud_image_result")
+                if air and air.get("_file") == uploaded.name:
+                    if air["ok"]:
+                        f = air["fields"]
+                        conf = f.get("confidence")
+                        st.success(
+                            "Cloud suggestion ready — the form below is "
+                            "pre-filled. **Review and correct before "
+                            "registering.**"
+                            + (f"  ·  confidence {conf * 100:.0f}%"
+                               if conf else "")
+                        )
+                        if f.get("reasoning"):
+                            st.caption(f"Model reasoning: _{f['reasoning']}_")
+                        prefill["defect_type"] = (f.get("defect_type")
+                                                  or "Unclassified")
+                        prefill["position"] = f.get("position")
+                        prefill["priority"] = f.get("priority") or "MEDIUM"
+                        prefill["crack_width_mm"] = f.get("crack_width_mm") or 0.0
+                        prefill["spall_depth_mm"] = f.get("spall_depth_mm") or 0.0
+                        prefill["area_cm2"] = f.get("area_cm2") or 0.0
+                        prefill["description"] = (
+                            f"{prefill['defect_type']} — AI-recognised from "
+                            f"{uploaded.name}")
+                        with st.expander("Raw model output"):
+                            st.code(air.get("raw") or "", language="json")
+                    else:
+                        st.error(
+                            f"Cloud classification failed: {air.get('error')}")
+                        if air.get("raw"):
+                            with st.expander("Raw model output"):
+                                st.code(air["raw"])
 
         # ---- Local LVM inference (image route) ----
         if USE_LOCAL_LVM:
@@ -361,15 +572,15 @@ if input_route.startswith("Image"):
                         )
 
         if extraction_route.startswith("Heuristic"):
-            prefilled_defect_type = heuristic_defect_type_from_filename(
+            prefill["defect_type"] = heuristic_defect_type_from_filename(
                 uploaded.name
             )
             with col_form:
-                if prefilled_defect_type != "Unclassified":
+                if prefill["defect_type"] != "Unclassified":
                     st.info(
                         f"Filename heuristic suggests "
-                        f"**{prefilled_defect_type}** based on `{uploaded.name}`. "
-                        f"Adjust below if needed."
+                        f"**{prefill['defect_type']}** based on "
+                        f"`{uploaded.name}`. Adjust below if needed."
                     )
                 else:
                     st.warning(
@@ -384,8 +595,8 @@ if input_route.startswith("Image"):
                     defect_type = st.selectbox(
                         "Defect type",
                         options=DEFECT_TYPE_OPTIONS,
-                        index=DEFECT_TYPE_OPTIONS.index(prefilled_defect_type)
-                        if prefilled_defect_type in DEFECT_TYPE_OPTIONS else 0,
+                        index=DEFECT_TYPE_OPTIONS.index(prefill["defect_type"])
+                        if prefill["defect_type"] in DEFECT_TYPE_OPTIONS else 0,
                     )
                     ring_id = st.text_input(
                         "Ring ID",
@@ -402,28 +613,36 @@ if input_route.startswith("Image"):
                 with col2:
                     position = st.selectbox(
                         "Position", options=POSITION_OPTIONS,
+                        index=POSITION_OPTIONS.index(prefill["position"])
+                        if prefill["position"] in POSITION_OPTIONS else 0,
                     )
                     priority = st.selectbox(
-                        "Priority", options=PRIORITY_OPTIONS, index=1
+                        "Priority", options=PRIORITY_OPTIONS,
+                        index=PRIORITY_OPTIONS.index(prefill["priority"])
+                        if prefill["priority"] in PRIORITY_OPTIONS else 1,
                     )
                     description = st.text_input(
                         "Short description",
-                        value=f"{defect_type} observed in inspection photo",
+                        value=prefill["description"]
+                        or f"{defect_type} observed in inspection photo",
                     )
 
                 with st.expander("Optional — quantitative measurements"):
                     colm1, colm2, colm3 = st.columns(3)
                     with colm1:
                         crack_width = st.number_input(
-                            "Crack width (mm)", min_value=0.0, step=0.1, value=0.0
+                            "Crack width (mm)", min_value=0.0, step=0.1,
+                            value=float(prefill["crack_width_mm"]),
                         )
                     with colm2:
                         spall_depth = st.number_input(
-                            "Spall depth (mm)", min_value=0.0, step=1.0, value=0.0
+                            "Spall depth (mm)", min_value=0.0, step=1.0,
+                            value=float(prefill["spall_depth_mm"]),
                         )
                     with colm3:
                         area_cm2 = st.number_input(
-                            "Affected area (cm²)", min_value=0.0, step=1.0, value=0.0
+                            "Affected area (cm²)", min_value=0.0, step=1.0,
+                            value=float(prefill["area_cm2"]),
                         )
 
                 preview_clicked = st.form_submit_button(
@@ -516,6 +735,8 @@ else:
         "crack_width_mm": 0.0,
         "spall_depth_mm": 0.0,
         "defect_type_guess": "Unclassified",
+        "position": None,
+        "priority": "MEDIUM",
     }
 
     if uploaded is not None:
@@ -533,6 +754,105 @@ else:
                              expanded=False):
                 st.code(extracted_text[:1500] +
                         ("..." if len(extracted_text) > 1500 else ""))
+
+            # ---- AI auto-classify (text route) — fills the form ----
+            if USE_AI_CLASSIFY:
+                st.markdown("**🤖 AI field extraction**")
+                if st.button("Extract fields with AI", key="run_ai_text",
+                             type="primary"):
+                    from utils.local_lvm import classify_defect_text
+                    with st.spinner(
+                        f"Running {st.session_state.ollama_model} on your "
+                        f"machine…"
+                    ):
+                        res = classify_defect_text(
+                            text=extracted_text,
+                            model=st.session_state.ollama_model,
+                            endpoint=st.session_state.ollama_endpoint,
+                        )
+                    res["_file"] = uploaded.name
+                    st.session_state.ai_text_result = res
+
+                air = st.session_state.get("ai_text_result")
+                if air and air.get("_file") == uploaded.name:
+                    if air["ok"]:
+                        f = air["fields"]
+                        conf = f.get("confidence")
+                        st.success(
+                            "AI suggestion ready — the form below is "
+                            "pre-filled. **Review and correct before "
+                            "registering.**"
+                            + (f"  ·  confidence {conf * 100:.0f}%"
+                               if conf else "")
+                        )
+                        if f.get("reasoning"):
+                            st.caption(f"Model reasoning: _{f['reasoning']}_")
+                        if f.get("defect_type"):
+                            prefilled["defect_type_guess"] = f["defect_type"]
+                        if f.get("ring_id") is not None:
+                            prefilled["ring_id"] = str(f["ring_id"])
+                        prefilled["chainage_m"] = f.get("chainage_m") or 0.0
+                        prefilled["crack_width_mm"] = f.get("crack_width_mm") or 0.0
+                        prefilled["spall_depth_mm"] = f.get("spall_depth_mm") or 0.0
+                        prefilled["position"] = f.get("position")
+                        prefilled["priority"] = f.get("priority") or "MEDIUM"
+                        with st.expander("Raw model output"):
+                            st.code(air.get("raw") or "", language="json")
+                    else:
+                        st.error(
+                            f"AI extraction failed: {air.get('error')}")
+                        if air.get("raw"):
+                            with st.expander("Raw model output"):
+                                st.code(air["raw"])
+
+            # ---- Cloud VLM field extraction (text route) ----
+            if USE_CLOUD_VLM:
+                provider = st.session_state.get("cloud_provider", "")
+                st.markdown(f"**☁️ Cloud VLM — {provider}**")
+                if st.button("Extract fields (cloud)", key="run_cloud_text",
+                             type="primary"):
+                    from utils.cloud_vlm import classify_defect_text_cloud
+                    with st.spinner(f"Sending the report to {provider}…"):
+                        res = classify_defect_text_cloud(
+                            text=extracted_text,
+                            provider=provider,
+                            api_key=st.session_state.get("cloud_key", ""),
+                            model=st.session_state.get("cloud_model"),
+                        )
+                    res["_file"] = uploaded.name
+                    st.session_state.cloud_text_result = res
+
+                air = st.session_state.get("cloud_text_result")
+                if air and air.get("_file") == uploaded.name:
+                    if air["ok"]:
+                        f = air["fields"]
+                        conf = f.get("confidence")
+                        st.success(
+                            "Cloud suggestion ready — the form below is "
+                            "pre-filled. **Review and correct before "
+                            "registering.**"
+                            + (f"  ·  confidence {conf * 100:.0f}%"
+                               if conf else "")
+                        )
+                        if f.get("reasoning"):
+                            st.caption(f"Model reasoning: _{f['reasoning']}_")
+                        if f.get("defect_type"):
+                            prefilled["defect_type_guess"] = f["defect_type"]
+                        if f.get("ring_id") is not None:
+                            prefilled["ring_id"] = str(f["ring_id"])
+                        prefilled["chainage_m"] = f.get("chainage_m") or 0.0
+                        prefilled["crack_width_mm"] = f.get("crack_width_mm") or 0.0
+                        prefilled["spall_depth_mm"] = f.get("spall_depth_mm") or 0.0
+                        prefilled["position"] = f.get("position")
+                        prefilled["priority"] = f.get("priority") or "MEDIUM"
+                        with st.expander("Raw model output"):
+                            st.code(air.get("raw") or "", language="json")
+                    else:
+                        st.error(
+                            f"Cloud extraction failed: {air.get('error')}")
+                        if air.get("raw"):
+                            with st.expander("Raw model output"):
+                                st.code(air["raw"])
 
             # ---- Local LVM inference (text route) ----
             if USE_LOCAL_LVM:
@@ -618,9 +938,13 @@ else:
             with col2:
                 position = st.selectbox(
                     "Position", options=POSITION_OPTIONS,
+                    index=POSITION_OPTIONS.index(prefilled["position"])
+                    if prefilled["position"] in POSITION_OPTIONS else 0,
                 )
                 priority = st.selectbox(
-                    "Priority", options=PRIORITY_OPTIONS, index=1
+                    "Priority", options=PRIORITY_OPTIONS,
+                    index=PRIORITY_OPTIONS.index(prefilled["priority"])
+                    if prefilled["priority"] in PRIORITY_OPTIONS else 1,
                 )
                 description = st.text_input(
                     "Short description",

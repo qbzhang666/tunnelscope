@@ -9,3 +9,6 @@ folium>=0.15
 streamlit-folium>=0.18
 matplotlib>=3.7
 requests>=2.31
+# Optional — only needed for the Cloud VLM (Anthropic Claude) ingest option.
+# OpenAI and Gemini use plain HTTP via requests, so no SDK is required for them.
+anthropic>=0.40
