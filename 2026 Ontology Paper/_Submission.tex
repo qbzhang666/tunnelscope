@@ -1,0 +1,1347 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Packages ---------------------------------------------------------
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{lineno}
+\usepackage{geometry}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{enumitem}
+\usepackage{setspace}
+\usepackage{url}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{threeparttable}
+\usepackage{xurl}
+\usepackage{enumitem}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{threeparttable}
+\usepackage{amssymb} % for \checkmark
+
+\geometry{a4paper, top=2cm, bottom=2cm, left=2cm, right=2cm}
+\onehalfspacing
+\linenumbers
+
+\hypersetup{colorlinks=false}
+
+% --- Theorem-like environments (used in appendix) --------------------
+\newtheorem{definition}{Definition}
+\newtheorem{property}{Property}
+
+% --- Listing style for SPARQL ----------------------------------------
+\lstdefinelanguage{SPARQL}{
+  morekeywords={SELECT,WHERE,PREFIX,FILTER,OPTIONAL,UNION,DISTINCT,ORDER,BY,LIMIT,a},
+  sensitive=true,morecomment=[l]{\#},morestring=[b]"
+}
+\lstset{language=SPARQL,basicstyle=\ttfamily\small,
+        frame=single,breaklines=true,xleftmargin=8pt}
+
+% =====================================================================
+\begin{document}
+
+% --- Title page -------------------------------------------------------
+\begin{titlepage}
+\centering
+\vspace*{0.8cm}
+{\LARGE\bfseries Serviceability-oriented Multimodal Data Integration\\[6pt]
+for Road Tunnel Maintenance Digital Twins:\\[6pt]
+An Australian Framework\par}
+
+\vspace{1.2cm}
+{\large
+Mengqi Huang$^{1}$ \quad
+Mohammad Matin Rouhani$^{2}$ \quad
+Zhihang Li$^{2}$ \quad
+Huamei Zhu$^{3}$ \quad
+Qian-Bing Zhang$^{2,*}$\par}
+
+\vspace{0.7cm}
+{\normalsize
+$^{1}$Department of Civil and Construction Engineering,
+   Swinburne University of Technology, Melbourne, Australia\\[2pt]
+$^{2}$Department of Civil and Environmental Engineering,
+   Monash University, Clayton, Australia\\[6pt]
+$^{3}$Department of Engineering, Durham University, Durham, United Kingdom\\[6pt]
+$^{*}$Corresponding author:
+   \href{mailto:qianbing.zhang@monash.edu}{qianbing.zhang@monash.edu}\par}
+
+\vspace{1.5cm}
+\textbf{Journal:} Tunnelling and Underground Space Technology (Elsevier)\\[3pt]
+\textbf{Manuscript type:} Original Research Article
+
+\vspace{1.2cm}
+% --- Highlights (Elsevier requirement) ------------------------------
+\noindent\textbf{Highlights}
+\begin{itemize}[leftmargin=4em]
+  \item OWL 2 ontology links FHWA Road Tunnel Manual, Austroads RADS and COBie for road-tunnel upkeep
+  \item LLM pipeline converts narrative standards into 7-level FMEA reasoning chains
+  \item Each modality (RGB, RGBD, thermal, GPR) maps to a distinct FMEA chain level
+  \item Semantic-level integration yields auditable, standards-traceable prescriptions
+  \item Case study: multimodal evidence expands repair scope and escalates the tier 
+\end{itemize}
+\end{titlepage}
+
+% --- Abstract ---------------------------------------------------------
+\clearpage
+\begin{abstract}
+\noindent
+Road tunnels are indispensable components of transport networks, providing critical connections while operating continuously under demanding environmental, geological, and hydrogeological conditions. Their large dimensions, confined geometry, and uninterrupted operation make comprehensive inspection challenging. Full-face inspection technologies such as LiDAR can rapidly capture high-resolution surface data, however, the resulting digital models are often descriptive rather than explanatory or instructive. This limitation is critical because seemingly minor defects may indicate latent deterioration and, if untreated, can lead to severe safety and operational consequences. With advances in artificial intelligence, particularly large language models (LLMs) and robotic inspection platforms, tunnel inspection is expected to move beyond defect detection towards knowledge-driven diagnosis and decision support. This paper presents a serviceability-oriented Prescriptive Twin framework for road-tunnel maintenance, that is, a digital twin that represents asset conditions and recommends maintenance actions from inspection evidence and codified engineering knowledge. The framework connects inspection data, prescriptive knowledge, decision-making, and verification through a Web Ontology Language 2.0 domain ontology populated by a schema-guided LLM pipeline. The ontology integrates tunnel maintenance standards, road asset data requirements, and an extended COBie schema, while the pipeline converts narrative standards into expert-validated seven-level Failure Mode and Effects Analysis (FMEA) chains. A multimodal layer maps RGB, RGB-D, thermal, and ground-penetrating radar (GPR) outputs to causal-chain entry points, such as Level 4 indicators and Level 5 causes. Demonstrated on an operating road tunnel, the framework generates traceable prescriptions and shows how multimodal evidence improves intervention accuracy, delivering an industry-deployable pathway for standards-compliant maintenance decision support.
+
+\medskip\noindent
+\textbf{Keywords:}~digital twin; ontology; tunnel maintenance; failure mode and effects analysis; multimodal sensing; decision support
+\end{abstract}
+
+% --- Graphical Abstract -----------------------------------------------
+\clearpage
+\thispagestyle{empty}
+
+\begin{center}
+    \textbf{Graphical Abstract}
+
+    \vspace{1cm}
+
+    \includegraphics[width=1\textwidth]{Fig_PDF/GA.pdf}
+\end{center}
+
+\clearpage
+% =====================================================================
+\section{Introduction}
+\label{sec:intro}
+
+Globally, transport infrastructure is expanding to accommodate population growth and increasing mobility demands driven by urbanisation. Australia's transport portfolio undergoing a generational expansion, with a rolling pipeline of more than \$120 billion over 10 years~\citep{CA2026}, including numerous underground construction projects that may be exposed to high-impact hazards that could undermine lifecycle resilience~\citep{ZHU2025106212}. In Melbourne alone, major road-tunnel projects including the West Gate Tunnel and the North East Link are adding new operational road tunnel this decade, alongside the existing CityLink (Burnley, Domain) and EastLink (Mullum Mullum) road tunnels and the ageing assets of earlier decades. Each new commission incurs an inspection, monitoring, and rehabilitation liability spread over a 100-year service life. Australian operators currently budget
+about 0.9-1.4\% of asset replacement value per year for maintenance. Despite this percentage decline, the actual dollar amount spent on maintenance nearly doubled over the same period due to the rapid growth of the infrastructure asset base~\citep{INSW2023}. The challenge is not whether to maintain, but how to allocate maintenance effort and rehabilitation budget across an expanding fleet.
+
+Alongside this economic significance, tunnel infrastructure presents substantial safety risks throughout its lifecyce. Statistical analyses of major tunnel accidents show that high-consequence events occur during both construction and operation~\citep{ZHU2022104460}. The 2012 Sasago Tunnel ceiling collapse in Japan killed nine people and was traced to undetected anchor-bolt corrosion that quantitative inspection should have caught years earlier~\citep{Sasago2013}. The 2007 Burnley Tunnel fire, with three fatalities, drove operational reforms but did not modernise structural condition assessment~\citep{Burnley2008}. Operators need maintenance regimes that anticipate deterioration systematically, integrating heterogeneous condition evidence into prescriptions that are timely and traceable to data.
+
+Tunnel BIM use cases include as-built documentation, spatial indexing of inspection records, and work-order management linked to component identifiers~\citep{Cheng2020}. For a survey of BIM and digital-modelling applications in underground construction, see~\citep{huang2021}. The digital twin (DT) concept extends BIM by adding live data connectivity and, more importantly for maintenance, reasoning capability~\citep{Tao2019,Grieves2017}. A widely used DT maturity model distinguishes four capability levels~\citep{Zhu2025,babanagar2025}: \emph{descriptive} twins mirror current state; \emph{reflective} twins compare current state with historical trend and design intent; \emph{predictive} twins project future deterioration; and \emph{prescriptive} twins answer ``what should be done'' by combining condition assessment with intervention knowledge. The transition from predictive to prescriptive is the demanding step. It requires that condition observations be linked to a structured body of maintenance knowledge through which decision logic can be traversed automatically. Ontologies supply the formal layer that makes such traversal possible~\citep{Pauwels2015,Theiler2018,Rasmussen2020}.
+
+The condition data of the framework draws on four sensing modalities, several of which are now routine in road-tunnel inspection. RGB imagery captures the visible surface and supports automated detection of cracks, spalls, and moisture states~\citep{Cha2017,Zhao2020,Li2019}. RGBD point clouds and laser scanners add geometric depth, enabling dimensional quantification of defects and 3D surface reconstruction~\citep{Wu2025}. Thermal infrared imaging detects temperature differentials induced by subsurface delamination and moisture infiltration~\citep{Konishi2016,Jiang2026}. Ground-penetrating radar (GPR) images the lining interior, resolving thickness, reinforcement cover, and voids behind the lining~\citep{Solla2021,Lai2018,Benedetto2017,Luo2024}. Each modality can probe a different stage of the same physical deterioration process: RGB and RGBD reveal the surface manifestation; thermal reveals the subsurface extension; GPR reveals the internal driver. Combining them by classical signal- or feature-level fusion produces a sharper image but does not produce a maintenance prescription. Producing a prescription requires interpreting each modality's output through engineering knowledge that connects what is seen to what should be done.
+
+A deployable prescriptive DT for tunnels requires four components in coupled form: a domain ontology that captures the prescriptive logic of the relevant national standards at the granularity needed to drive intervention; a practical pipeline for populating that ontology from standards documents; a way to integrate heterogeneous condition data from the modalities operators actually deploy; and a deployment specification that an operator's IT and engineering teams can implement. Each ingredient has been addressed in isolation in the literature, but their integration is what distinguishes a framework from a collection of methods.
+
+This paper presents a serviceability-oriented decision-support framework for a prescriptive DT for tunnel maintenance. The contributions are fourfold:
+\begin{enumerate}[leftmargin=*]
+  \item An OWL~2.0 domain ontology integrating the Technical Manual for Design and Construction of Road Tunnels (DCRT) by the American Association of State Highway and Transportation Officials (AASHTO), the Austroads Guide to Road Tunnels (AGRT), the Austroads Road Asset Data Standard (RADS), and an extended COBie schema, with cross-ontology axioms (statements taken as true to serve as starting points for reasoning) validated through competency questions. AASHTO severity codes provide the authoritative defect representation; RADS supplies the asset-management context; COBie acts as a workbook for job distribution.
+  \item An LLM-assisted extraction pipeline that converts narrative standards into seven-level FMEA chains, validated by domain experts against four acceptance criteria.
+  \item A multimodal integration layer that maps RGB, RGBD, thermal, and GPR outputs to distinct entry points on the FMEA chain, together with rules for resolving conflicts when modalities disagree.
+  \item A deployment specification covering software stack, integration with operator workflows, training, and acceptance criteria.
+\end{enumerate}
+
+Three terms central to the paper are defined. \emph{Serviceability} is defined as an asset's continuing fitness to deliver its intended function over its design service life, evidenced by the absence of defects whose severity exceeds the standards-prescribed thresholds for closure or major intervention. It is distinguished from ultimate-limit-state safety, which the framework does not address, and from purely visual condition, which is one input to serviceability but not equivalent to it. The framework's intended outputs are serviceability assessments at component, subsystem, and tunnel level, with intervention prescriptions when serviceability is threatened. The \emph{prescriptive digital twin} is a DT that, in addition to mirroring current state and projecting future deterioration, outputs an intervention-category-level prescription with steps and provenance to source standards for each identified defect, supporting downstream specification by maintenance engineers. This sits at the highest level of the descriptive-reflective-predictive-prescriptive maturity model and is the maturity level this framework targets. The contribution of this work lies in the systematic mapping of outputs from multiple inspection modalities into a single shared ontology, such that a query over the ontology produces one answer informed by all modalities, rather than four separate answers requiring manual reconciliation. We refer to this as \emph{semantic-level multimodal integration} in preference to ``multimodal data fusion'' to signal that the integration happens at the semantic level (through the ontology) rather than at the signal or feature level.
+
+The framework is demonstrated on an operating Australian road tunnel through two defect locations and an inspection-configuration ablation. The remainder of the paper is organised as follows. Section~\ref{sec:lit} reviews related work. Section~\ref{sec:method} presents the framework. Section~\ref{sec:ontology} describes the ontology and its implementation in OWL ontology editor Prot\'eg\'e. Section~\ref{sec:demo} reports the case study. Section~\ref{sec:discussion} positions the contribution, discusses deployment, and identifies limitations. Section~\ref{sec:conclusion} concludes the paper with key innovations and future outlook.
+
+% =====================================================================
+\section{Related Work}
+\label{sec:lit}
+
+\subsection{BIM and asset information management for tunnels}
+
+BIM provides a structured platform for managing asset-level technical information through object-oriented schemas~\citep{Eastman2011}. In the context of asset maintenance, previous studies have sought to link inspection information with existing BIM models to preserve the relationship between observed conditions and as-built records. For example, \citet{chen2026} developed a particle-filter-based motion model for image-to-BIM registration, using UAV-captured fa\c{c}ade images to localise and register defects. \citet{zhang2026} established a semi-automated workflow for localised updates of as-built BIM models for MEP systems using point-cloud data and visual programming scripts. \citet{Bellon2025} and \citet{Alothman2025} proposed frameworks that leverage the vendor-neutral, object-oriented Industry Foundation Classes (IFC) schema for facility management, with a focus on standardising the representation of inspection, damage, and maintenance data.
+
+BIM has increasingly been adopted as a digital asset management platform for transport and linear infrastructure projects~\citep{huang2021,Huang2022}. Typical applications include built-in documentation, spatial indexing of inspection records, and work-order management linked to component identifiers~\citep{Cheng2020,Hagedorn2023,Byun2021}. For tunnel applications, \citet{Yu2023} proposed a digital-twin-enabled decision-support system for the operation and maintenance of tunnel electromechanical equipment, in which BIM provides asset delivery information. \citet{Zhu2024} developed a workflow for extracting dielectric properties from tunnel BIM models to support the establishment of a machine-learning pipeline for wave-based physics. The pipeline was used to detect abnormalities in GPR radargrams, with the results subsequently incorporated into a risk assessment matrix and reflected in the tunnel BIM model to enhance the visualisation of damaged components. \citet{Ye2026} introduced tunnel digital model generation via panoptic segmentation of ultra-high-resolution images, incorporating damage detection and damage instantiation in IFC.
+
+Despite these advances, several limitations still restrict the use of BIM for tunnel maintenance. First, IFC was originally developed for building construction and still requires substantial extension to represent tunnel-specific objects, although the IFC Tunnel and Alignment extensions provide partial support~\citep{Borrmann2018}. Second, as-built BIM models often diverge from constructed reality, particularly in older tunnels~\citep{Ye2025}. Third, BIM models are typically static records and do not represent evolving deterioration states~\citep{Zhu2025}. Recent work has framed BIM as one element of a tunnel-lifecycle digital-twin platform spanning design, construction, and operation phases~\citep{huang2025,xiao2025}, with the maintenance phase requiring an operational layer above BIM, supported by shared semantics that can integrate inspection results, condition grades, sensor readings, and maintenance histories.
+
+\subsection{Multimodal sensing for tunnel condition assessment}
+
+Each of the four routine modalities is well established individually. RGB defect detection by convolutional neural networks reports high average precision on benchmark datasets~\citep{Cha2017,Li2019,Zhao2020}. Point cloud data add depth registration. \citet{Wu2025} demonstrate spall detection using a point-based coupled global-local network on utility pipes. Thermography reveals subsurface delamination, moisture infiltration paths, and elevated moisture
+content behind the structure surface~\citep{Konishi2016,Jiang2026}, with the documented property that subsurface damage extent typically exceeds the visible defect~\citep{Poncetti2025}. GPR measures lining thickness, reinforcement cover, and voids behind the lining~\citep{Solla2021,Lai2018,Benedetto2017,Luo2024}, and is the only modality giving direct evidence of conditions behind the lining surface.
+
+Multimodal fusion in civil infrastructure operates predominantly at two abstraction levels~\citep{Hall1997}. \emph{Signal-level} fusion combines raw sensor outputs (e.g.\ thermal-on-RGB overlays). \emph{Feature-level} fusion combines extracted features as joint classifier input~\citep{Naddaf2025,Hakimi2025,Kang2026}. \emph{Semantic-level} integration, which interprets modality outputs through a shared knowledge structure encoding domain meaning~\citep{Wu2014}, is related to decision-level processing. Recent work integrating partial semantic structure for tunnel and utility maintenance includes \citet{Yu2023} and \citet{Wang2021}, but these efforts have not addressed a comprehensive FMEA-aligned ontology.
+
+\subsection{Ontology-based digital twins}
+
+Distributed ontology-based interoperability, in which purpose-built domain ontologies are linked through OWL alignment axioms, offers modular flexibility relative to fixed-schema approaches such as ifcOWL~\citep{Pauwels2015,Theiler2018,Bonduel2019,Rasmussen2020}. It has been demonstrated for bridges~\citep{Ren2019}, buildings~\citep{Mahdavi2017}, and rail infrastructure~\citep{Li2022}, with reasoning capability dependent on the semantic richness of the model layer~\citep{Tao2019}. For applications in underground construction, distributed ontology-based interoperability is well represented in the existing literature. In the tunnel maintenance domain, \citet{Yu2021} applied semantic web technologies to enable multi-level information fusion across the data, object, and knowledge levels. That study extended the COBie standard ontologically to organise tunnel digital twin data and introduced a rule-based semantic reasoning approach for equipment fault-cause analysis. \citet{Li2024} developed an ontology-based paradigm comprising five elements (scenario, virtual model, physical entity, relation, and component) to support multidisciplinary operations in an infrastructure project comprising foundation excavation, subway tunnels, and pipe networks.
+
+\citet{Zhu2025} identify the maintenance-knowledge integration layer as the principal barrier to the predictive-to-prescriptive DT transition for underground infrastructure. However, existing studies are either ontology-only approaches without multimodal sensing or vice versa, or tunnel DT proposals that do not formalise FMEA chains. Tunnel-specific implementations that integrate multimodal non-destructive testing (NDT) data with maintenance FMEA logic, and that align formally with established ontologies based on jurisdictional asset standards, have not been reported.
+
+\subsection{LLM-based knowledge extraction}
+
+Large language models have shown strong performance on structured information extraction from technical documents, including scientific literature~\citep{Wei2022}, regulatory texts~\citep{Katz2024}, and engineering standards~\citep{Xu2025,Ge2026}. Schema-guided extraction, which constrains the LLM to populate a predefined output structure, achieves higher terminological consistency than free-form extraction and produces outputs directly compatible with ontology population~\citep{Caufield2024,dagdelen2024}. LLM-assisted extraction pipelines for the seven-level FMEA structure relevant to tunnel maintenance, with reported precision metrics, have not been published.
+
+The literature collectively addresses ontology development, multimodal sensing, and LLM-assisted knowledge extraction in adjacent domains, but no published work couples them into a deployable prescriptive DT framework for tunnel maintenance, formally aligned with Australian standards, with multimodal data mapping to distinct stages of an FMEA-encoded ontology, and with a deployment specification suitable for operator uptake. This is the gap the present work addresses.
+
+\subsection{International road-tunnel maintenance standards}
+\label{sec:lit_intl}
+
+The Australian standards selected for the present instantiation (Section~\ref{sec:standards}) are not unique in their function: every major tunnel-operating jurisdiction maintains an analogous body of prescriptive maintenance guidance, asset-management data specification, and construction-handover schema. Table~\ref{tab:intl_standards} summarises the principal counterparts in the jurisdictions most relevant to international portability of the framework.
+
+Several patterns become apparent on inspection. The three-role decomposition (defect-level prescriptive standard; asset-management data standard; construction-handover schema) used by the framework is recognisable in every jurisdiction surveyed, although the role boundaries differ. In some jurisdictions a single document spans two roles. For example, the FHWA TOMIE Manual~\citep{FHWA2015} fulfils both the prescriptive-maintenance role (parallel to AASHTO) and parts of the asset-management role. In others, the roles are distributed across a more fragmented document set: the German regime uses RI-EBW-PR\"UF~\citep{RIEBWPRUEF} for inspection methodology, ZTV-ING for construction and maintenance specifications, and DIN~1076 for inspection regimes, with no single document corresponding to AASHTO's defect-level FMEA scope. The FMEA-level structure (component~$\to$~mechanism~$\to$ defect~$\to$~indicator~$\to$~cause~$\to$~threshold~$\to$~intervention) is implicit in most national standards but explicit in only a few. The Japan Road Association guidelines~\citep{JRA2019}, revised after the 2012 Sasago collapse, are the closest international counterpart to a written FMEA structure, making the extraction pipeline applicable with minimal schema modification. The PIARC technical reports~\citep{PIARC2017} occupy a distinct role as international consensus rather than national regulation, and provide a useful cross-check for any national instantiation. Severity-coding systems are not directly inter-translatable. AASHTO uses categorical severity codes (S-1 to S-4 spalls; D, PM, M, GS, F moisture states; R-1, R-2 rebar exposure). Austroads RADS uses a five-grade asset-management scale. The Japanese A/B/C/S grading is asset-management-oriented but with mandatory close-proximity hammer sounding that yields binary indicators comparable to the AASHTO RING/NO\_RING test. The UK DMRB CD~352~\citep{DMRB2020} uses Severity~1 to~4 bands distinct from the AASHTO codes. The Chinese JTG~H12~\citep{JTGH122015} uses a five-grade scale similar in structure to RADS but with different thresholds. This non-translatability is the principal reason the framework retains the source-jurisdiction's authoritative codes natively rather than collapsing to a common scale.
+
+\begin{table}[htbp]
+\centering
+\caption{Principal road-tunnel maintenance standards in jurisdictions
+  relevant to international portability of the framework. Roles map
+  to the three-ontology architecture of
+  Section~\ref{sec:onto_overview}.}
+\label{tab:intl_standards}
+\small
+\begin{tabularx}{\textwidth}{p{2.0cm} p{3.4cm} p{2.6cm} X}
+\toprule
+\textbf{Jurisdiction} & \textbf{Principal documents} &
+  \textbf{Severity coding} &
+  \textbf{Framework portability} \\
+\midrule
+United States & AASHTO DCRT~\citep{AASHTO2009}; FHWA TOMIE
+  Manual~\citep{FHWA2015}; NCHRP synthesis reports &
+  S-1 to S-4 spalls; D/PM/M/GS/F moisture; R-1, R-2 rebar &
+  Already integrated in this work; TOMIE complements AASHTO on
+  operations \\[2pt]
+International (PIARC) & PIARC TC~D.5 (Road Tunnel Operations)
+  technical reports~\citep{PIARC2017} & Qualitative consensus
+  framework & Useful as international cross-check; not nationally
+  binding \\[2pt]
+United Kingdom & DMRB CD~352 (road tunnel inspection and
+  maintenance)~\citep{DMRB2020}; CS series for structures &
+  Severity~1-4 & Quantitative thresholds; close fit to FMEA
+  structure \\[2pt]
+Germany & RI-EBW-PR\"UF~\citep{RIEBWPRUEF}; ZTV-ING; DIN~1076 &
+  Condition number 1.0-4.0 (continuous) &
+  Three-document structure; pipeline must aggregate across
+  documents \\[2pt]
+France & CETU \emph{Guide de l'inspection du g\'enie civil des tunnels
+  routiers}~\citep{CETU2015} & IQOA bands (1, 2, 2E, 3, 3U) &
+  Detailed defect catalogue; close fit to L3-L4 fields \\[2pt]
+Italy & MIT/ANAS guidelines (post-Genoa
+  revisions)~\citep{MIT2020} & Risk-based class scale &
+  Recently strengthened; FMEA-style risk integration \\[2pt]
+Switzerland & ASTRA tunnel maintenance directives~\citep{ASTRA2019} &
+  Condition classes 1-5 & Tunnel-heavy network; mature regime \\[2pt]
+Norway & Statens vegvesen Handbook~N500~\citep{N500} &
+  Damage class 1-4 & Open road asset database (NVDB) supports
+  ABox population \\[2pt]
+Japan & JRA Road Tunnel Maintenance Guidelines~\citep{JRA2019};
+  MLIT 5-yearly close-inspection mandate &
+  A / B / C / S grades; hammer-sounding binary &
+  Closest international fit to FMEA structure; revised
+  post-Sasago \\[2pt]
+China & JTG~H12 (highway tunnel maintenance);
+  JTG/T~5120 (inspection)~\citep{JTGH122015} &
+  Five-grade scale (1-5) & Large operational fleet; growing
+  digital-inspection adoption \\[2pt]
+South Korea & KICT guidelines; FMS framework &
+  Five-class scale & Mature digital asset management \\[2pt]
+Australia / NZ & AASHTO~DCRT (adopted); Austroads Guide to Road
+  Tunnels~\citep{Austroads2024}; RADS~V4~\citep{AustroadsRADS2022};
+  COBie via ABAB~\citep{ABAB2018} &
+  AASHTO codes (defects); RADS 1-5 (AMS) &
+  The instantiation reported in this paper \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The pattern of similarities and differences shapes a deliberate sequence for international extension of the framework. The Japanese JRA guidelines, with their explicit FMEA-style structure and recent post-Sasago revision, would be the most efficient first extension
+target. The UK DMRB CD~352 follows naturally because of its quantitative thresholds and English-language source. The PIARC technical reports provide an international cross-check that does not itself require operator adoption. The German regime, with three documents covering the AASHTO role between them, is the most demanding extension and the best stress-test of the extraction pipeline's robustness to fragmented sources.
+
+
+% =====================================================================
+\section{Framework}
+\label{sec:method}
+
+\subsection{Overall framework}
+\label{sec:arch}
+
+Figure~\ref{fig:dt_arch} presents a prescriptive digital twin architecture that connects the \emph{Physical World} to \emph{Digital Assets} through five numbered layers. \emph{Layer 1, the Data Layer}, organises three data categories: knowledge data from standards and regulations, virtual data from tunnel design information such as a BIM model, and physical data from monitoring data, inspection records, and maintenance records. \emph{Layer 2, the (Prior) Knowledge Layer}, captures established domain knowledge, including condition grades, defect severities, deterioration states, structural states, operational capacity status, maintenance urgency metrics, and maintenance method selection rules. In parallel, \emph{Layer 3, the Multimodal Integration layer}, translates outputs from inspection modalities such as RGB, RGBD, GPR, and thermal sensing into ontology entities, with examples including DefectCondition, MeasuredIndicators, DataCollectionParameters, Structure, and PotentialCause. These inputs feed \emph{Layer 4, the Ontology and Processing Layer}, where semantic rules and reasoning rules support an inference engine, and where ontology entities and ontology instances are handled through TBox-ABox ontology development, instantiation, loading, and inference. \emph{Layer 5, the Decision-Making Layer}, uses query and reasoning to support risk, condition, and serviceability assessment; priority (criticality) assessment; maintenance method selection; resilience assessment; and demand and utilisation assessment. The multimodal integration layer is the controlled interface that translates outputs from each sensing method into the knowledge base. Because different sensing methods produce different types of data, the mapping rules are configured separately for each modality (Section~\ref{sec:integration}).
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{Fig_PDF/Fig_1_Five Layer Prescriptive Digital Twin Architecture.pdf}
+  \caption{Five-layer prescriptive DT architecture. The Multimodal Integration Layer is the principal point of coupling between raw sensing data and the formal maintenance
+    knowledge held in the Knowledge Layer.}
+  \label{fig:dt_arch}
+\end{figure}
+
+\subsection{Standard identification and ontology layer scoping}
+\label{sec:standards}
+
+As shown in Figure~\ref{fig:standards_linkage}, Australian standards and guidelines for tunnel maintenance were identified and organised into three categories. The full set of standards screened was reduced to the four primary sources, on the criteria of (a)~Australian
+regulatory endorsement, (b)~explicit treatment of road-tunnel maintenance procedures, (c)~availability of severity classifications and decision thresholds, and (d)~currency (most recent edition).
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{Fig_PDF/Fig_2_Standardised Identification and Linkage Structure.pdf}
+  \caption{Identification of Australian standards and the three derived ontology layers, linked through cross-ontology semantic alignment axioms (Section~\ref{sec:semantic_links}).}
+  \label{fig:standards_linkage}
+\end{figure}
+
+\subsection{LLM-assisted FMEA extraction pipeline}
+\label{sec:llm_pipeline}
+
+The extraction pipeline converts narrative maintenance guidance into structured FMEA records. Two design methodologies were followed. First, the pipeline is \emph{schema-guided}: the LLM is constrained to populate the seven-level chain of Equation~\eqref{eq:fmea_chain} using controlled vocabularies (Table~\ref{tab:schema}). This extends classical FMEA (IEC 60812:2018; AIAG-VDA 2019) by replacing the conventional severity-occurrence-detection scoring with an evidence-traceable reasoning chain explicitly designed for prescriptive maintenance decisions. Second, the pipeline is supported by \emph{validation}: every record is reviewed by a domain expert against four criteria: (1) semantic consistency; (2) engineering plausibility; (3) threshold fidelity; and (4) intervention coherence. Semantic consistency ensures that the defect is compatible with the nominated component and mechanism. Engineering plausibility checks whether inspection indicators support the stated damage condition. Threshold fidelity verifies that quantitative values are correctly transcribed. Intervention coherence confirms that prescribed steps match established maintenance practice. Each record is accepted, corrected, or rejected, with rationale logged in an audit trail. The pseudocode for the pipeline is provided in Appendix~\ref{app:llm}.
+
+The seven-level FMEA chain referenced throughout is the directed relation
+\begin{equation}
+  \mathrm{FMEA} : c_{\text{component}} \to f_{\text{mechanism}}
+  \to d_{\text{defect}} \to i_{\text{indicator}}
+  \to p_{\text{cause}} \to t_{\text{threshold}}
+  \to v_{\text{intervention}}
+  \label{eq:fmea_chain}
+\end{equation}
+in which each arrow is an OWL object property in the Maintenance ontology. The set of sensing modalities considered is $\mathcal{M}=\{\text{RGB, RGBD, Thermal, GPR}\}$ and the seven FMEA
+levels are indexed by $L=\{1,\dots,7\}$.
+
+The primary extraction engine in this study is Claude Opus~4.7~\citep{Anthropic2025}, chosen for its long-context reasoning over dense technical prose, handling of multi-step conditional logic, and robustness to schema-constrained output
+generation. All quantitative results in Table ~\ref{tab:llm_comparison} attributed to the cloud engine were produced by this model (API identifier \texttt{claude-opus-4-7}; extraction runs executed April-May 2026 at \texttt{temperature}=0 with the controlled-vocabulary version recorded in the audit log). To address data-sovereignty constraints faced by some operators, the same prompts and schema were additionally validated against open-weight Qwen models~\citep{Qwen2024} served on-premise via Ollama (configurations and dates given in Section~\ref{sec:discussion}). The framework's downstream layers are unchanged regardless of which engine populates the ontology; cross-engine comparison is reported in Section~\ref{sec:discussion}. LLM outputs are not bit-exact reproducible across model versions, so the pipeline records the model version and date, the deterministic decoding configuration (\texttt{temperature}=0 for determinism and reproducibility), the system prompt, and the controlled-vocabulary version. With these recorded, repeated runs at \texttt{temperature}=0 against the same model version returned identical structured outputs in this study.
+
+Across $n=42$ candidate records spanning six FMEA chains and 53 taxonomy entries, 39 were accepted unchanged, giving record acceptance rate (all seven fields correct) of 92.9\% (Wilson 95\%~CI [80.5\%, 97.6\%]). Precision is highest on categorical fields (L1 component, L2 mechanism, both 100\%) and lowest on the quantitative-threshold field~L6 (85.7\%), where all errors are localised. The hallucination rate is $1/42=2.4\%$, within the range reported for schema-guided extraction in technical domains~\citep{Caufield2024,dagdelen2024}. Records were reviewed by the lead engineering expert; a second engineer spot-checked 20\% of the records and concurred with the lead in all sampled cases. We do not report a Cohen's $\kappa$ statistic because the spot-check sample (n=8) is too small to support a meaningful inter-rater reliability estimate, and expanding the rater pool was not feasible within the project's timeline because of the narrow availability of dual-qualified reviewers (tunnel maintenance experience plus familiarity with the FMEA schema). A multi-rater validation study with a target sample size of at least 30 records and a deliberately edge-case-rich sampling design is identified as a near-term follow-on activity in Section~\ref{sec:future}. The per-field breakdown is shown in Appendix~\ref{app:precision}.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{Fig_PDF/Fig_3_LLM-Assisted FMEA Knowledge Extraction Pipeline.pdf}
+  \caption{LLM-assisted FMEA extraction pipeline with schema-guided prompting and expert validation.}
+  \label{fig:llm_pipeline}
+\end{figure}
+
+The extraction schema is structured around the seven-level chain of Equation~\eqref{eq:fmea_chain}, drawn from established FMEA methodology~\citep{IEC60812}. The complete schema, with controlled vocabularies and content examples, is presented in Table~\ref{tab:schema}. Categorical-field controlled vocabularies enforce terminological consistency across extractions from different source documents, and were iteratively refined as new terms were encountered.
+
+\begin{longtable}{
+>{\bfseries\raggedright\arraybackslash}p{2.0cm}
+>{\raggedright\arraybackslash}p{2.0cm}
+>{\raggedright\arraybackslash}p{6cm}
+>{\raggedright\arraybackslash}p{4.5cm}
+}
+\caption{FMEA extraction schema: field definitions, controlled vocabularies (CV), and content examples.}
+\label{tab:schema}\\
+\toprule
+Field & Role in chain & CV / validation & Content examples \\
+\midrule
+\endfirsthead
+\multicolumn{4}{c}{\tablename~\thetable{} (continued)}\\
+\toprule
+Field & Role in chain & CV / validation & Content examples \\
+\midrule
+\endhead
+\midrule
+\multicolumn{4}{r}{\textit{continued\ldots}}\\
+\endfoot
+\bottomrule
+\endlastfoot
+Component & L1: Asset / sub-asset assessed &
+  \textit{category}: Structure, Lining, Waterproofing, Drainage,
+  Ventilation, Electrical, Roadway, Safety\_Systems, Fire\_Protection,
+  Joints &
+  Concrete tunnel lining; Steel segmental lining; Ceiling hangers
+  \\[3pt]
+Failure Mechanism & L2: Deterioration process &
+  \textit{category}: Corrosion, Leakage\_Water, Structural\_Movement,
+  Environmental\_Weathering, Construction\_Damage, Chemical\_Attack,
+  Fatigue, Fire\_Damage &
+  Chloride-induced corrosion of reinforcement; Groundwater intrusion
+  through joints \\[3pt]
+Defect / Condition & L3: Observable damage with severity &
+  Spall codes S-1 ($<2$~in)\,/\,S-2 (to rebar)\,/\,S-3 (behind rebar)\,/\,S-4
+  (special); moisture states D / PM / M / GS / F &
+  S-2 spall with exposed rebar; Leaking crack with glistening surface
+  (GS) \\[3pt]
+Inspection Indicators & L4: Measurable evidence &
+  \textit{type}: Visual, Dimensional, Acoustic, Thermal, Deformation,
+  Electrical, Chemical;
+  \textit{technique}: Visual, Infrared, Radar\_GPR, LiDAR,
+  Photogrammetry, HalfCellPotential, AcousticEmission, ChainDrag &
+  Spall diameter (cm); Rebar section loss (\%);
+  Moisture state code; Hanger ringing (RING/NO\_RING) \\[3pt]
+Potential Cause & L5: Root cause with confidence &
+  \textit{category}: Groundwater, Chemical\_Exposure, Overloading,
+  Settlement, Design\_Deficiency, Construction\_Deficiency, Adjacent\_Works;
+  \textit{confidence}: Established / Probable / Inferred &
+  Groundwater intrusion with chlorides $\Rightarrow$ rebar corrosion
+  (Established) \\[3pt]
+Decision Thresholds & L6: Trigger criteria &
+  \textit{type}: Acceptable, Monitor\_Closely, Investigation\_Required,
+  Action\_Required, Emergency &
+  Rebar section loss $>30\%$ $\Rightarrow$ structural analysis required
+  (Action\_Required, AASHTO~\S16.4.3) \\[3pt]
+Intervention & L7: Prescribed maintenance response &
+  \textit{category}: Preventive, Monitoring, Repair, Rehabilitation,
+  Replacement, Emergency\_Closure, Waterproofing\_Remediation &
+  Remove unsound concrete; apply zinc-rich coating within 48~hr;
+  rebuild with shotcrete and welded wire mesh \\
+\end{longtable}
+
+\subsection{Multimodal integration layer}
+\label{sec:integration}
+
+The four routine inspection modalities probe different stages of the same physical deterioration. RGB shows the visible surface and is mapped to defect-condition (level~3) and indicator (level~4) entities, typically a defect class and a moisture state. RGBD adds dimensional information at level~4: spall depth, plan area, crack width, and out-of-plane geometry. Thermal imaging detects subsurface delamination and active moisture paths and contributes to level~3 (hidden defect extent) and level~5 (cause). GPR resolves lining thickness, reinforcement cover, and voids behind the lining, and contributes to levels~4 and~5. Figure~\ref{fig:complementarity} shows the multimodal complementarity diagram. The formal definitions and a chain-coverage property are in Appendix~\ref{app:formal}.
+
+The four mappings collectively cover FMEA levels~3 to~5 by direct sensing. Levels~1 (component) and~2 (mechanism) are inferred from the level-3 defect class through ontology axioms, because in the Maintenance ontology each defect class is functionally linked to a component class and a mechanism class. Level~1 may also be directly indicated by visible-light sensing technologies, including RGB, RGBD, or laser scanning accompanied by RGB/RGBD imagery, where the relevant component is visually or geometrically recognisable. However, in the present ontology-driven workflow, Level~1 is primarily formalised through inference from the Level~3 defect class and its functional link to the corresponding component class. Levels~6 (threshold) and~7 (intervention) are linked in the TBox through threshold-to-intervention object properties; for each defect class, a reasoning step then selects the applicable threshold band from the indicator value and the intervention prescribed by that band. In the demonstration (Section~\ref{sec:res_demo}) this reasoning step is implemented in a Python evaluator that reads the post-load graph; the same step is specified as a Semantic Web Rule Language (SWRL) forward-chaining rule in Listing~\ref{lst:swrl} for deployment on a SWRL-capable reasoner. The practical consequence is that any modality combination that includes RGB or thermal observations, both of which contribute level-3 evidence, is sufficient to traverse the full chain and produce a prescription. Combinations limited to RGBD or GPR alone do not, because the defect class itself remains undetermined without a level-3 observation. This result is exploited in the ablation analysis of Section~\ref{sec:generalisation}.
+
+When two modalities populate the same FMEA level with conflicting values, the framework applies a small set of resolution rules. Three conflict types are distinguished. Severity disagreement (for example moisture state M from RGB versus F from thermal) retains the higher-severity code and tags the other as a minor contraindication. Extent disagreement (for example a visible spall area of 185~cm$^2$ from RGBD versus a delamination boundary of 590~cm$^2$ from thermal)
+retains both as distinct ontology entities (\texttt{visible\_extent}, \texttt{subsurface\_extent}) under the interpretation that they describe different physical states, and flags the union as the operative repair scope. Cause disagreement retains the conflict as a disjunction at L5, defers prescription to \texttt{Investigation\_Required}, and emits a work order for further inspection. All three rules are specified in SWRL form (Appendix~\ref{app:swrl}) and implemented in the reference build by an equivalent Python evaluator that records full modality provenance, so no input is discarded and the operator can trace which modality contributed which evidence to any prescription. The SWRL specification permits the rule set to be migrated to an operational reasoner (Section~\ref{sec:industry}) without semantic change. Appendix~\ref{app:swrl} shows the extent-disagreement rule.
+
+The result of populating an FMEA chain with the combined evidence from all deployed modalities at a single defect location, after conflict resolution, and traversing the chain to its level-7 intervention, is what we term a \emph{multimodally-integrated condition assessment}. The assessment carries provenance back to each populating modality and to the source-standard paragraphs along the chain. Throughout the rest of the paper, ``multimodally-integrated condition assessment'' means this object. This semantic-level handling distinguishes the framework from signal-level and feature-level fusion (Table~\ref{tab:fusion_levels}).
+
+\begin{table}[htbp]
+\centering
+\caption{Comparison of multimodal data-combining paradigms.}
+\label{tab:fusion_levels}
+\begin{tabularx}{\textwidth}{p{2.4cm} X X X}
+\toprule
+\textbf{Level} & \textbf{Operation} & \textbf{Output} &
+  \textbf{Maintenance utility} \\
+\midrule
+Signal & Spatial registration of raw sensor outputs (e.g.\ thermal-on-RGB
+  overlay) & Composite image / signal & Visual interpretation aid;
+  no automated decision support \\
+Feature & Concatenation of feature vectors as joint classifier input &
+  Class label / regression value & Detection performance enhancement;
+  decision logic external \\
+Semantic (this work) & Mapping of each modality output to distinct
+  ontology entities; chain traversal yields prescription &
+  Validated maintenance prescription with traceability &
+  Direct decision support; auditable; modular \\
+\bottomrule
+\end{tabularx} 
+\end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{Fig_PDF/Fig_4_Multimodal Complementarity Diagram.pdf}
+  \caption{Multimodal complementarity diagram. The four modalities collectively cover FMEA levels 3 to 5; levels 1 to 2 (component, mechanism) and 6 to 7 (threshold, intervention) are populated by ontology inference rather than direct sensing.}
+  \label{fig:complementarity}
+\end{figure}
+
+
+% =====================================================================
+\section{Ontology Development}
+\label{sec:ontology}
+
+\subsection{Three-layer architecture}
+\label{sec:onto_overview}
+
+The framework's knowledge layer is a three-ontology stack with a clear division of responsibility based on the distinct purposes of the source standards. The \emph{Maintenance ontology} (Section~\ref{sec:maint_onto}) is populated from prescriptive maintenance standards (AASHTO~DCRT referred in the AGRT) and encodes defect-level FMEA reasoning chains, severity codes, and intervention prescriptions; it answers what is wrong, why, and what to do. The \emph{Austroads RADS ontology} (Section~\ref{sec:rads_onto}) is populated from the Austroads Road Asset Data Standard (RADS) and encodes the network-level vocabulary used by Australian and New Zealand road agencies; it provides the network location, classification, and AMS-level recorded condition. The \emph{Extended COBie ontology} (Section~\ref{sec:cobie_onto}) is populated from the construction-to-operations handover schema (ISO~19650-3 / ABAB-endorsed COBie) and identifies the physical component, its space, and its inspection history and active work order.
+
+The two engineering-content ontologies are deliberately separated by purpose, not redundantly populated. AASHTO defines defect-level FMEA classes (S-1 to S-4 spalls; D, PM, M, GS, F moisture states; RING and NO\_RING acoustic tests, and so on) at the granularity required for prescription, and these severity codes are preserved as-is in the Maintenance ontology. RADS supplies the asset hierarchy, asset-register schema, controlled vocabularies, and the operator-facing asset management information system (AMIS) context within which the AASHTO-coded defects sit, but the framework does not hard-map AASHTO severity codes into the broad five-level RADS grade scale, because the RADS bands admit interpretive latitude (Section~\ref{sec:rads_onto}). The three ontologies are linked through cross-ontology axioms (Section~\ref{sec:semantic_links}) that allow a single SPARQL query to traverse from a sensor observation through the AASHTO defect codes to a network-level prioritised work order.
+
+The ontology layer separates terminological knowledge (TBox) from assertional knowledge (ABox). The TBox defines classes, object properties, data properties, and axioms, and is populated from the standards via the LLM pipeline of Section~\ref{sec:llm_pipeline}. The ABox holds instance-level data for a specific tunnel, including COBie asset records, inspection observations, sensor measurements, and multimodal condition data.
+
+\subsection{Austroads RADS ontology}
+\label{sec:rads_onto}
+
+The Austroads RADS V~4~\citep{AustroadsRADS2022} is the asset management standard recognised by Australian and New Zealand road agencies. RADS specifies the data items, asset hierarchies, and condition-grading scale required by an AMIS for network-level investment planning, performance reporting, and inter-agency information exchange. The Standard is primarily organised by function groups. The Inventory function group, and to a limited extent the Condition function group, are further subdivided by asset type, as shown in Figure~\ref{fig:rads}. RADS is not a defect-classification or maintenance-prescription standard; that role is filled by AASHTO~DCRT referred in the AGRT through the Maintenance ontology (Section~\ref{sec:maint_onto}). 
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.5\linewidth]{Fig_PDF/Fig_5_Austroads Road Asset Data Standard.pdf}
+    \caption{Relationship between function groups, asset types and data items}
+    \label{fig:rads}
+\end{figure}
+
+In the proposed framework RADS therefore plays a contextual role: it provides the asset register schema, the network primitives (Node, Link, LinkSection, Road; RADS~\S4.2), and the controlled vocabularies used operator-side, against which the AASHTO-coded defects and the COBie-recorded components can be located and reported. Tunnel-specific inventory items (\S8.3.31 of the Standard) are imported as RADS classes \texttt{rads:Tunnel}, \texttt{rads:Barrel}, \texttt{rads:Portal}, \texttt{rads:CappingBeam}, and \texttt{rads:Buttress}, capturing the granularity at which RADS itself enumerates tunnel sub-elements. Component-level granularity below this (individual segmental-lining segments, joints, anchors) is held in the COBie Component sheet (Section~\ref{sec:cobie_onto}), where the maintenance work-order routing operates. The closest RADS class for them is \texttt{rads:Tunnel} itself.
+
+RADS distinguishes condition into five grades (Table~9.8~\citep{AustroadsRADS2022}: Very~good, Good, Fair, Poor, Very~poor) with broad AMIS-oriented definitions that cannot be directly mapped against the AASHTO severity codes (S-1\,\ldots\,S-4 spalls, D/PM/M/GS/F moisture states, R-1/R-2 rebar exposure, RING/NO\_RING acoustic-tension test). The latter are more targeted for tunnel infrastructure. We therefore preserve AASHTO severity codes as-is in the Maintenance ontology and \emph{do not} hard-map them into RADS grades. Where an operator-side AMIS requires a single RADS grade to be reported against an asset element, this is supplied as an operator-policy decision outside the framework's authoritative scope (Section~\ref{sec:serviceability}).
+
+\subsection{Maintenance ontology}
+\label{sec:maint_onto}
+
+The Maintenance ontology is the framework's reasoning substrate. It is populated from the prescriptive engineering knowledge held in the AASHTO \emph{Design and Construction of Road Tunnels}~(DCRT) manual~\citep{AASHTO2009} referred in the Austroads \emph{Guide to Road Tunnels}~\citep{Austroads2024}, and encodes the decision logic linking a sensor-detected defect to a specific intervention with materials, sequencing, and threshold-based escalation. All multimodal evidence flows into this ontology for reasoning; RADS and COBie play projection roles for downstream consumers (Section~\ref{sec:semantic_links}).
+
+The ontology's principal structural commitment is the seven-level Failure Mode and Effects Analysis (FMEA) chain (Equation~\eqref{eq:fmea_chain} of Section~\ref{sec:llm_pipeline}):
+\emph{component} (L1) $\to$ \emph{mechanism} (L2) $\to$ \emph{defect} (L3) $\to$ \emph{indicator} (L4) $\to$ \emph{cause} (L5) $\to$ \emph{threshold} (L6) $\to$ \emph{intervention} (L7). Each level is realised as a class hierarchy in the TBox; each arrow is realised as an OWL object property (\texttt{atComponent}, \texttt{hasMechanism}, \texttt{hasIndicator}, \texttt{hasPotentialCause}, \texttt{hasIntervention}). The level-6 threshold band is not encoded as a static property: it is selected at reasoning time from the indicator value by the evaluator of Section~\ref{sec:integration}, which then binds the corresponding level-7 intervention. At inspection time, the ABox is populated with instances at each level that bind to the modality outputs, and the SPARQL traversal of Listing~\ref{lst:sparql} returns the L7 intervention together with its full chain of justification.
+
+The TBox contains the following principal classes for FMEA-chain reasoning:
+\begin{itemize}[leftmargin=*, itemsep=0.3em]
+  \item \texttt{maint:Structure}: physical tunnel components at the granularity of FMEA reasoning (lining segments, joints, waterproofing membranes, hangers, anchors). Equivalent to
+    \texttt{cobie:Component} via axiom~A1 (Section~\ref{sec:semantic_links}).
+  \item \texttt{maint:DefectCondition}: observed condition departures from the as-designed state, typed by AASHTO severity code (e.g.\ \texttt{SpallS2}, \texttt{LeakingCrackGS},
+    \texttt{HangerNoRing}). The L3 anchor of every chain.
+  \item \texttt{maint:MeasuredIndicator}: quantitative or categorical observations supporting a defect (e.g.\ spall depth, moisture state, delamination area, rebar cover). Each indicator is linked to its acquiring modality via \texttt{isDetectedWith}.
+  \item \texttt{maint:MeasurementTechnique}: the modality or procedure that produced an indicator (Visual, Infrared, GPR, LiDAR, Photogrammetry, AcousticEmission,
+    HalfCellPotential, ChainDrag). The framework's \emph{multimodal} character is realised by allowing multiple \texttt{MeasurementTechnique} instances to populate the same \texttt{DefectCondition} through different \texttt{MeasuredIndicator} instances.
+  \item \texttt{maint:PotentialCause}: the L5 root cause inferred from the populated indicators (e.g.\ chloride ingress, groundwater infiltration, anchor fatigue). Multiple causes may
+    co-occur and are reconciled through the contradiction-resolution rules of Section~\ref{sec:integration}.
+  \item \texttt{maint:Threshold}: L6 quantitative or categorical decision criteria from the source standards (e.g.\ ``rebar section loss $>30\%$'' from AASHTO~\S16.4.3; ``NO\_RING on mason's hammer test''). Thresholds determine which intervention tier applies.
+  \item \texttt{maint:Intervention}: L7 prescriptive output. Each Intervention specifies sequenced steps, required materials (\texttt{requiresMaterial}), and escalation triggers.
+    Equivalent to \texttt{cobie:Job} via axiom~A2.
+\end{itemize}
+
+The class hierarchy of \texttt{maint:DefectCondition} is populated from a deterioration taxonomy extracted from the source standards. Five mechanisms are presently covered: corrosion (steel, concrete, hanger), groundwater leakage (cracks, joints), structural cracking (load-induced, settlement-induced), ceiling-hanger anchor failure, and rock-reinforcement deterioration in unlined sections. Table~\ref{tab:taxonomy} gives the corrosion-mechanism (M1) entries as representative; the full 53-entry taxonomy is provided as supplementary material. Each mechanism instantiates one or more FMEA chains; six fully populated chains with their key decision thresholds are listed in Table~\ref{tab:fmea_chains}, with extraction details and validation reported in Section~\ref{sec:llm_pipeline}. The taxonomy is extensible: new
+mechanisms (fire damage, alkali-silica reaction, fatigue) follow the same extraction pipeline and inherit the same chain structure without ontology redesign.
+
+\begin{table}[htbp]
+\centering
+\caption{Deterioration type taxonomy: corrosion mechanism (M1) entries.}
+\label{tab:taxonomy}
+\begin{tabularx}{\textwidth}{
+  >{\raggedright\arraybackslash}X
+  >{\raggedright\arraybackslash}X
+}
+\toprule
+\textbf{Defect / condition} &
+\textbf{Material / system} \\
+\midrule
+Spalls/delamination with exposed corroded rebar, section loss &
+Concrete lining (rebar, embedded steel) \\
+
+Through-corrosion / holes in plates &
+Steel segmental lining \\
+
+Through-corrosion / local loss &
+Cast-iron segmental lining \\
+
+Deformed / corroded flanges, corroded bolts &
+Steel or cast-iron segmental lining \\
+
+Section loss in beams, columns, knee braces, standoffs &
+Structural framing steel \\
+
+Corroded / broken rods, clevises, turnbuckles, pins &
+Ceiling hangers and hardware \\
+
+Failed / corroded adhesive anchors &
+Ceiling hanger anchors \\
+
+Deteriorated rock bolts / dowels / cables &
+Rock reinforcement in unlined rock tunnels \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{Extracted FMEA reasoning chains with key decision thresholds.}
+\label{tab:fmea_chains}
+\begin{tabularx}{\textwidth}{p{3.7cm} p{2.4cm} p{2.2cm} X}
+\toprule
+\textbf{Chain ID} & \textbf{Component} & \textbf{Mechanism} &
+  \textbf{Key threshold} \\
+\midrule
+FMEA-COR-CONC-SPALL-01 & Concrete lining & Corrosion-led spalling &
+  Rebar section loss $>30\%$ $\Rightarrow$ structural analysis \\
+FMEA-LEAK-CONC-CRACK-01 & Concrete joints/cracks & Groundwater
+  intrusion & GS/F moisture state $\Rightarrow$ grout injection;
+  crack movement determines grout type \\
+FMEA-COR-STEEL-SEG-01 & Steel/cast-iron liner &
+  Corrosion through-penetration &
+  Any through-corrosion $\Rightarrow$ plate repair \\
+FMEA-COR-HANG-FAIL-01 & Ceiling hangers &
+  Corrosion / anchor failure &
+  NO\_RING on mason's hammer test $\Rightarrow$ investigation \\
+FMEA-CRACK-CONC-STRUCT-01 & Concrete lining (structural cracks) &
+  Settlement / overload &
+  Dormant: epoxy rebonding; active: do not rebond, investigate cause \\
+FMEA-ROCK-FALL-UNLINED-01 & Unlined rock tunnel &
+  Rock reinforcement deterioration &
+  Loose rock $\Rightarrow$ immediate scaling; deteriorated reinforcement
+  $\Rightarrow$ specialist geological assessment \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The Maintenance ontology is authored in OWL~2.0 (Turtle serialisation), with class hierarchy and consistency verified in Prot\'eg\'e, rooted at \texttt{DHM\_Data} (Diagnostic Health Management Data) with three primary branches: \texttt{ConditionMonitoring}, \texttt{DiagnosticTechnique}, and \texttt{Structure}. The OntoGraf visualisation and the expanded class hierarchy are shown in Figure~\ref{fig:maintenance-ontology}. The OWL~2.0 ontology files are provided (Section~\ref{sec:data_avail}) and are interoperable with any standards-compliant OWL environment.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{Fig_PDF/Fig_6_ASSHTO Maintenance Ontology Protege Visualisation.pdf}
+  \caption{(a)~OntoGraf visualisation of the Maintenance ontology; (b)~expanded class hierarchy. The ontology is rooted in \texttt{DHM\_Data} (Diagnostic Health Management Data) and organised into three primary branches.}
+  \label{fig:maintenance-ontology}
+\end{figure}
+
+\subsection{Extended COBie ontology}
+\label{sec:cobie_onto}
+
+The COBie ontology supplies the operational interface to the operator's existing maintenance management system. Standard COBie sheets~\citep{East2007} (Facility, Floor, Space, Component, Type, System, Job, Resource, Issue, Document, Attribute) are retained without modification; tunnel-DT-specific information is added through a small set of extension columns on two sheets. Multimodal sensing evidence is held by reference in the standard Document sheet without schema change. Figure~\ref{fig:cobie_mapping} shows the COBie mapping for a typical tunnel.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=1\textwidth]{Fig_PDF/Fig_7_COBie mapping.pdf}
+  \caption{COBie information structure and its application to tunnel asset management. 
+(a) Standard COBie worksheets organised into spatial, asset, inspection, and supplementary information domains. 
+(b) Role of the Type-Component relationship in linking design intent with physical assets. 
+(c) Conceptual mapping of COBie entities to a tunnel cross-section, illustrating the integration of spatial zones, components, inspection information, and supporting metadata for digital-twin-enabled inspection and maintenance workflows.}
+  \label{fig:cobie_mapping}
+\end{figure}
+
+The Component sheet records the physical components of the tunnel at the segment level (e.g., individual segmental-lining segments such as \texttt{S04-1345-T2B} in the case-study tunnel). Four columns are added to record the result of a multimodal inspection at each component:
+\begin{itemize}[leftmargin=*, itemsep=0.3em]
+  \item \texttt{InspectionResult}: reference to the inspection event with overall status
+  (e.g.\ \texttt{Defect\_Present}, \texttt{As\_Designed}) and operative urgency tier
+  derived from the activated FMEA chain's L6 threshold class.
+
+  \item \texttt{Defects}: list of \texttt{maint:DefectCondition} ABox identifiers
+  anchored on this component, each tagged with its AASHTO severity code
+  (e.g.\ \nolinkurl{DC-S04-1345-T2B-2026-001}: \texttt{SpallS2} at construction joint,
+  185~cm$^2$ visible).
+
+  \item \texttt{ConditionStates}: non-defect condition properties relevant to
+  FMEA-chain inputs, such as \texttt{Moisture\_GS} and \texttt{ReducedRebarCover}.
+
+  \item \texttt{Measurements}: quantitative indicators with units and inline modality
+  provenance, such as \nolinkurl{spall_depth=28mm(RGBD#1248L)} and
+  \nolinkurl{delamination_area=590cm2(THERM#1248L)}.
+\end{itemize}
+
+The Job sheet records maintenance work orders. A single column is added:
+\begin{itemize}[leftmargin=*, itemsep=0.3em]
+  \item \texttt{MaintenancePrescription}: the intervention text produced by FMEA-chain traversal, specifying sequenced steps, materials, and any escalation triggers. Chain identification and contributing evidence are recoverable through standard COBie linkage (\texttt{Job.Priors} $\to$ \texttt{Component.InspectionResult} $\to$ \texttt{Component.Defects}) and through the Document references described below; they are not duplicated as Job columns.
+\end{itemize}
+
+Sensor outputs underpinning each defect record are held as standard COBie Document records, requiring no schema extension. The native columns of the Document sheet provide the necessary fields: \texttt{Path}~and~\texttt{File} point to the raw data file (point cloud, thermal radiance image, GPR radargram); \texttt{Category} discriminates the modality (e.g., \texttt{RGBD\_PointCloud}, \texttt{Thermal\_Image}, \texttt{GPR\_Radargram}); \texttt{Stage} marks the document as inspection-phase; \texttt{Table}~and~\texttt{Table.Name} anchor the document to its parent record. The parent is typically the inspected \texttt{cobie:Component}. 
+
+Multiple modality evidence documents for the same defect cohere through this shared parent: a thermal scan, an RGB image, and a GPR scan of a tunnel section defect each become separate Document records that all point, via \texttt{Table}~and~\texttt{Table.Name}, to the same parent Component. Cross-document relationships beyond shared-parent (for example, ``compared against the 2025 baseline RGB image'') are recorded on the standard Attribute sheet as Attribute records anchored on the document. The \texttt{Document.Reference} column is not used in this context, as it is reserved for external-library or manufacturer-catalogue references.
+
+A work-order crew picking up a Job record therefore reaches the underlying multimodal evidence through standard COBie traversal: \texttt{Job.Priors} resolves to the \texttt{InspectionResult} on the Component sheet, which identifies the parent Component, to which all relevant Document records are linked. No custom Job column is required to expose evidence to the crew, and no new sheet is introduced. The COBie additions made by the framework therefore comprise five extension columns total across two sheets (four on Component, one on Job), plus disciplined use of the standard Document sheet to hold multimodal evidence by reference. No new sheets are introduced and no existing standard columns are modified. The organisation of the extended COBie workbook for tunnel asset management is shown in Figure~\ref{fig:cobie_sheets}.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{Fig_PDF/Fig_8_COBie_tabs.pdf}
+  \caption{Organisation of extended COBie spreadsheets for tunnel asset management. Highlighted columns in (b) and (c) are \texttt{tunnel-O\&M} extensions to the standard COBie schema.}
+  \label{fig:cobie_sheets}
+\end{figure}
+
+\subsection{Cross-ontology alignment}
+\label{sec:semantic_links}
+
+The three ontologies are linked through cross-ontology axioms. Three of these alignments are foundational, namely the COBie-RADS-Maintenance triad on component, condition record, and intervention; the remaining axioms link secondary classes. The foundational cross-ontology alignment axioms are shown in Table~\ref{tab:alignments}. There were 31 competency questions used to check validity. The full set of competency questions is provided in Appendix~\ref{app:cq}. The visual structure of the alignment is shown in Figure~\ref{fig:semantic_links}: each ontology layer is rendered as a column, with \texttt{owl:equivalentClass} relations as solid bidirectional arrows, and cross-ontology object properties as dashed directed arrows.
+
+\begin{table}[htbp]
+\centering
+\caption{Foundational cross-ontology alignment axioms (examples;\(\equiv\) means ``equivalent to''; \(\sqsubseteq\) means ``subclass of''; $\sqcup$ means ``union of'').}
+\label{tab:alignments}
+\begin{tabularx}{\textwidth}{p{1.4cm} X p{3.4cm}}
+\toprule
+\textbf{Number} & \textbf{Alignment or bridging links} & \textbf{OWL/RDF relation} \\
+\midrule
+1 & \texttt{cobie:Component} \(\equiv\) \texttt{maint:Structure};
+     \texttt{cobie:Component} \(\sqsubseteq\) \texttt{rads:Asset} &
+     \texttt{owl:equivalentClass}; \texttt{rdfs:subClassOf} \\
+2 & \texttt{cobie:Job} \(\equiv\) \texttt{maint:Intervention} &
+     \texttt{owl:equivalentClass}; \texttt{rdfs:subClassOf} \\
+3 & \texttt{rads:Asset $\equiv$ rads:Tunnel $\sqcup$ rads:Barrel
+     $\sqcup$ rads:Portal $\sqcup$ rads:CappingBeam $\sqcup$
+     rads:Buttress} &
+     \texttt{owl:equivalentClass} (RADS hierarchy) \\
+4 & \texttt{maint:locatedAt} range $\sqsubseteq$
+     \texttt{rads:LinkSection $\sqcup$ cobie:Space} &
+     \texttt{rdfs:range} \\
+5 & \texttt{maint:requiresMaterial} domain $\sqsubseteq$
+     \texttt{maint:Intervention} &
+     \texttt{rdfs:domain} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{Fig_PDF/Fig_9_Semantic Links Between Ontology Layers.pdf}
+  \caption{Cross-ontology semantic alignment between the three layers. Dashed arrows: \texttt{owl:equivalentClass}; solid arrows: cross-ontology object properties. The three foundational
+    alignments enable competency-question SPARQL traversal from a sensor observation in the Maintenance ABox to a network-level work order in the RADS/COBie ABox.}
+  \label{fig:semantic_links}
+\end{figure}
+
+Listing~\ref{lst:sparql} shows the SPARQL realisation of one of the competency questions, traversing from a defect record to a prescribed intervention: \emph{given a defect at chainage $x$ with multimodal evidence, what intervention is prescribed and what materials are required?} In practice operators do not need ontology-engineering skill to run it at run-time: when an inspection populates an ABox, the SPARQL queries (Listing~\ref{lst:sparql}) traverse the cross-ontology alignment axioms via property-path expressions (e.g.~\texttt{rdf:type/rdfs:subClassOf*}) to connect the new defect record to the asset register and the work-order. The same traversal can be performed transparently by an OWL~2.0 reasoner materialising the closure at load time (Section~\ref{sec:res_demo}); the demonstration uses the property-path formulation because it requires no separate reasoning service and remains fully reproducible on a single machine.
+
+\begin{lstlisting}[caption={SPARQL realisation of CQ: traversal
+  from defect to intervention.},label=lst:sparql,float=htbp]
+PREFIX maint: <http://example.org/tunnel-maintenance#>
+PREFIX rads:  <http://example.org/austroads-rads#>
+
+SELECT DISTINCT ?defect ?mechanism ?cause ?intervention
+                ?material
+WHERE {
+  ?defect       a                       maint:DefectCondition ;
+                maint:locatedAt         ?chainage ;
+                maint:hasMechanism      ?mechanism ;
+                maint:hasIndicator      ?indicator ;
+                maint:hasPotentialCause ?cause ;
+                maint:hasIntervention   ?intervention .
+  ?indicator    maint:isDetectedWith    ?modality .
+  ?intervention maint:requiresMaterial  ?material .
+  FILTER(?chainage = "1250m"^^xsd:string)
+}
+\end{lstlisting}
+
+
+% =====================================================================
+\section{Demonstration on an Australian Road Tunnel}
+\label{sec:demo}
+
+\subsection{Case study and multimodal sensing campaign}
+\label{sec:tunnelA}
+
+The case study site is an operating road tunnel forming part of a major metropolitan road network in Australia. The tunnel comprises a driven (bored) main section and cut-and-cover portal sections, with a reinforced concrete lining designed for a 100-year service life. The tunnel is in mid-life, at a stage at which cumulative deterioration warrants systematic condition assessment. Specific identifiers (location, length, age, traffic volume, and geological setting) are withheld for operator confidentiality. A multi-sensory condition assessment campaign was conducted in 2024 (Table~\ref{tab:data_collection}). Representative outputs from each modality are shown in Figure~\ref{fig:modalities}.
+
+\begin{table}[htbp]
+\centering
+\caption{Multimodal sensing equipment, coverage, and data
+  characteristics for the case study campaign.}
+\label{tab:data_collection}
+\begin{tabularx}{\textwidth}{p{1.7cm} p{2.5cm} p{1.7cm} X p{2.0cm}}
+\toprule
+\textbf{Modality} & \textbf{Equipment} & \textbf{Coverage} &
+  \textbf{Data characteristics} & \textbf{Framework role} \\
+\midrule
+RGB & Mirrorless cameras (2 units) & Section of tunnel &
+  104 defect records (52 leakage, 41 cracks, 11 spalls);
+  transverse cracks on side linings; leakage at construction joints &
+  Surface defect classification \\[3pt]
+RGBD & Laser scanner; LiDAR depth camera &
+  Registered subsection & 5 scanner stations, 2 registered;
+  approx. 10~min/scan; medium-density point cloud &
+  Geometric quantification \\[3pt]
+Thermal & Infrared camera & Approx. 15 leakage sites &
+  Localised temperature depressions; subsurface moisture path mapping &
+  Cause-level diagnosis \\[3pt]
+GPR & Step-frequency antenna & 5 leakage locations &
+  B-scan over 2m survey lines on tunnel lining; detected lining thickness variation and potential delamination zones &
+  Internal structural diagnosis \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{Fig_PDF/Fig_10_Representative Multimodal Sensing Outputs from Tunnel A.pdf}
+  \caption{Representative multimodal sensing outputs from the case study tunnel. The four panels illustrate the surface, geometric, subsurface thermal, and internal radar evidence streams that enter the integration framework.}
+  \label{fig:modalities}
+\end{figure}
+
+A representative defect is used to demonstrate the framework: a construction joint on the right tunnel wall at chainage~1250~m, exhibiting a spall with glistening surface moisture, active leakage, and subsurface anomalies. The four modalities populate distinct ontology entities, which the ontology then traverses to a single multimodally-integrated prescription (Figure~\ref{fig:mapping_example}).
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{Fig_PDF/Fig_11_Modality-to-ontology mapping worked example.pdf}
+  \caption{Modality-to-ontology mapping at chainage~1250~m. Each modality enters FMEA-COR-CONC-SPALL-01 at distinct levels through its respective ontology entities.}
+  \label{fig:mapping_example}
+\end{figure}
+
+The RGB image at chainage~1250~m shows a spall at a construction joint with glistening surface moisture (levels 3 and 4). It is mapped to \texttt{DefectCondition} $\to$ \texttt{Spalls} (provisional S-2: depth reaching reinforcing steel), \texttt{MeasuredIndicators} $\to$ moisture state code GS, and \texttt{MeasurementLocation} $\to$ chainage 1250~m, right wall. The laser-scan point cloud quantifies spall depth at $28\pm3$~mm and plan area at $185$~cm$^2$ (level 4), confirming the S-2 classification, and records no convergence deformation at this section, ruling out active structural movement. The thermal image shows a temperature depression of $4.7^\circ$C relative to the surrounding lining surface, extending roughly $60$~mm beyond the visible spall edge, with subsurface area roughly $590$~cm$^2$, about $3.2\times$ the $185$~cm$^2$ visible spall (levels 3 and 5). It is mapped to \texttt{DefectCondition} $\to$ \texttt{Delaminations} (subsurface area $590$~cm$^2$, equivalent radius approximately 137~mm) and \texttt{PotentialCause} $\to$ groundwater moisture ingress. The subsurface damage is approximately $3.2\times$ the visible surface area, directly informing repair scope. The GPR profile shows a continuous lining reflection at approximately $40$~cm depth consistent with expected lining thickness ($30$-$45$~cm). Localised anomalous reflections at approximately $33$~cm depth, roughly $6-7$~cm in front of the $40$~cm back-face reflection, indicating a potential debonding or local loss of contact behind the lining. The observation is therefore mapped to \texttt{Structure} $\to$ \texttt{Lining}, \texttt{MeasuredIndicators} $\to$ lining thickness approximately $400$~mm and localised interface anomaly, and \texttt{PotentialCause} $\to$ debonding behind lining.
+
+The ontology brings the four modality contributions together into a single condition narrative: RGB observes an S-2 spall at a construction joint with moisture state GS; RGBD measures the spall at $28\pm3$~mm deep, $185$~cm$^2$ area; thermal reveals delamination extending approximately $3.2\times$ beyond the visible spall; and GPR confirms adequate lining thickness with a localised anomaly at $33$~cm depth, interpreted as debonding/void within the lining behind the spall. The activated FMEA chain is FMEA-COR-CONC-SPALL-01. The cause diagnosis at chain level~5 is groundwater intrusion through the void behind the lining, then accelerated chloride-induced corrosion, then S-2 spalling with GS moisture state at the construction joint. The threshold check at chain level~6 is to confirm rebar section loss at repair; if it exceeds 30\% then structural analysis is required (AASHTO~\S16.4.3, \texttt{Action\_Required}). The prescribed intervention at chain level~7 has five steps: (a) formation grouting to fill the void within the lining before surface repair (GPR-informed); (b) polyurethane chemical grout to seal the active moisture path (thermal-informed); (c) removal of unsound concrete across the thermal-anomaly boundary, not the visible spall boundary (thermal-informed scope); (d) cleaning of rebar to white metal and application of zinc-rich coating within 48~hr of cleaning; and (e) rebuilding with shotcrete and welded wire mesh, with mechanical couplers if section loss exceeds 30\%. As discussed in Section~\ref{sec:future}, the framework's prescription is at the intervention-category level (formation grouting, extended-scope repair, chemical-grout sealing) with provenance to source-standard clauses; final materials, mix designs, injection pressures, and sequencing details remain the responsibility of the specifying engineer.
+
+Table~\ref{tab:comparison} compares the maintenance prescription that would result from each individual modality with the multimodally-integrated output. The principal observations are as follows. First, assessment from RGB alone populates only the surface AASHTO defect codes at chainage~1250~m: S-2 spall and GS moisture state. The AASHTO-prescribed intervention for this code set is the standard spall-repair protocol bounded by the visible spall area. Multimodal data integration additionally populates the subsurface and internal AASHTO codes (extended delamination from thermal; void behind lining and reduced rebar cover from GPR), producing a materially richer defect description for the same physical location. The richer description triggers a more conservative tier of the FMEA chain: formation grouting behind the lining is required before surface repair, the repair boundary extends to the thermal-anomaly extent rather than the visible spall, and a structural-analysis trigger applies if rebar section loss exceeds the AASHTO~\S16.4.3 threshold. The intervention-tier escalation is a deterministic consequence of the expanded AASHTO defect-code set, not a subjective re-grading by the assessing engineer. The repair area at this defect grows from $185$~cm$^2$ (RGB+RGBD visible spall) to approximately $590$~cm$^2$ (thermal-anomaly boundary), a factor of $3.2$ at this location. Underestimation of repair scope is a known cause of premature re-deterioration and unplanned re-intervention~\citep{Watase2015}. The GPR-informed formation-grouting step is added before surface repair; without it, the void behind the lining persists and the surface intervention may fail through continued moisture ingress. Single-modality assessment omits this step entirely.
+
+\begin{table}[htbp]
+\centering
+\caption{Single-modality versus multimodally-integrated prescription for the
+  chainage~1250~m defect. (IR referred to infrared, i.e., thermal)}
+\label{tab:comparison}
+\begin{tabularx}{\textwidth}{p{2.0cm} X X X p{2.4cm}}
+\toprule
+\textbf{Assessment basis} & \textbf{Populated AASHTO codes} &
+  \textbf{Repair scope} & \textbf{Intervention steps} &
+  \textbf{Intervention tier} \\
+\midrule
+RGB only & S-2, GS & Visible spall area
+  ($185$~cm$^2$) & Standard concrete repair &
+  Standard spall repair \\
+RGB+RGBD & S-2 (depth/area confirmed), GS & Visible spall area
+  ($185$~cm$^2$) & Standard concrete repair, S-2 protocol &
+  Standard spall repair \\
+RGB+IR & S-2, GS, Delamination(extended) & Thermal-anomaly
+  boundary (approximately 590~cm$^2$) & Concrete repair with
+  extended scope & Extended-scope repair \\
+Multimodal (all four) & S-2, GS, Delamination(extended),
+  VoidBehindLining, ReducedCover & Thermal boundary;
+  void backfill required &
+  Five-step prescription with formation grouting, sealed moisture
+  path, extended scope & Extended-scope repair with
+  formation grouting \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Research demonstration}
+\label{sec:res_demo}
+
+The framework is implemented as a research demonstration in the form of a simplified single-machine reference build, intentionally designed to be open and reproducible from a fresh repository clone without dependence on external services. This simplified configuration is provided for research validation and testing purposes; the full operational deployment used for local industrial evaluation adopts a more distributed architecture on secured local machines due to data-governance and cybersecurity requirements.
+Concretely, the three-ontology TBox and the ABox of inspection records are loaded at application startup into an in-process \texttt{rdflib} graph~\citep{rdflib}.  At load time, the OWL~2~RL profile reasoner \texttt{owlrl}~\citep{owlrl} runs over the assembled graph and materialises the deductive closure of subClassOf, equivalentClass, subPropertyOf, property characteristics, and domain/range axioms; SPARQL~1.1~\citep{w3c2013sparql11} queries against the post-closure graph are exposed through a SPARQL Console page, where each query is visible in its original text and amenable to operator inspection. The threshold-firing rules and the three conflict-resolution rules of Section~\ref{sec:integration} are specified in SWRL form~\citep{horrocks2004swrl} (Appendix~\ref{app:swrl}) and evaluated in the reference build by a Python rule evaluator that operates on the loaded graph; the SWRL form is the migration specification, and the Python evaluator and SWRL implementation produce equivalent inferences over the cases reported in this study.
+
+The operator interface is a Streamlit dashboard whose pages span the full inspection-to-prescription workflow: defect ingest, defect register, per-defect detail with its FMEA chain, a SPARQL console, the CV-to-COBie bridge, and an ontology browser, together with supporting pages for asset (tunnel) registration, a three-dimensional lining viewer, a standards-reference library, and one-click report export. Condition, provenance, and prescriptions are visualised and exported to CSV, JSON, and PDF for downstream integration with maintenance management systems. Three capabilities in the reference build are reported here as demonstrations rather than as validated contributions. First, at ingest an optional schema-guided vision-language step (Section~\ref{sec:future}) pre-fills the AASHTO-coded fields from an uploaded photograph or inspection report for expert confirmation, using either an on-premise open-weight model or a cloud engine through a common structured-output parser. Second, a defect register can be exported to IFC4, in which each defect is written as a placed building element carrying its measured-attribute property set and an \texttt{IfcClassificationReference} whose URI is the defect's ontology class, so that a prescription opens in any openBIM viewer in the operator's spatial context. Third, the build attaches an indicative unit-rate cost band to each prescription whose width grows as diagnostic completeness falls; the unit rates are placeholder defaults for operator calibration, and the figure is illustrative rather than a costing claim. Within the demonstration system, new defects can be introduced directly through the dashboard using uploaded inspection imagery and associated metadata, allowing the full reasoning workflow to be exercised on previously unseen cases. In the example presented in Figure~\ref{fig:demo_app}, a newly reported tunnel-lining crack defect is ingested into the system together with its inspection evidence, location, modality provenance, and contextual asset information. The framework then propagates the defect through the ontology-driven FMEA chain, linking the defect condition to its associated component, indicators, inferred causes, geological context, threshold checks, and prescribed interventions. The resulting outputs include explainable reasoning traces, standards-linked intervention recommendations, and structured work-order records exportable in JSON and CSV formats for downstream asset-management workflows. The equivalent architecture intended for scaled-up industry deployment is described in Section~\ref{sec:industry}.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.92\linewidth]{Fig_PDF/Fig_12_Demo app workflow.pdf}
+    \caption{Workflow of the single-machine demonstration.}
+    \label{fig:demo_app}
+\end{figure}
+
+\subsection{Generalisation and ablation analysis}
+\label{sec:generalisation}
+
+To test whether the framework's value generalises beyond corrosion-led spalling, a second defect from the campaign exercising a different FMEA chain is presented. The presentation focuses on which modality contributes which level of the FMEA chain rather than on intra-defect quantitative variability, since the operational value of the multimodal layer lies in modality-level coverage of the chain rather than in numerical precision at any one level.
+
+A leakage-induced cracking case located on the inspected lining section was examined by all four modalities. The RGB image records a
+crack at the lining surface accompanied by visible moisture staining (AASHTO moisture state assigned as M, transitioning to GS following
+seasonal rainfall). The RGBD scan confirms no out-of-plane displacement between adjacent lining sections at the crack location, ruling out active structural movement and consistent with a moisture-driven cracking mechanism rather than a load-driven one. The infrared image shows a localised temperature depression at the crack of approximately $5.5^\circ$C relative to the surrounding lining (measured leak-to-background contrast in the range $21.5\text{-}22.0^\circ$C against $26.6\text{-}27.3^\circ$C background, characteristic of through-thickness water transport. Comparable contrasts are observed at the other infrared-imaged leakage spots in the campaign). The GPR scan at the same location
+reveals an inclined linear reflection starting at approximately $35$~cm depth and extending towards the surface, interpreted as an air-filled crack or delamination propagating through the lining rather than terminating at the visible surface trace. The activated chain is \texttt{FMEA-LEAK-CONC-CRACK-01}.
+
+The four modalities populate distinct ontology entities along the chain. RGB-only assessment populates the surface-defect classification (\texttt{Cracks} with moisture state M) and the \texttt{MeasurementLocation}, prescribing surface crack-sealing per the AASHTO joint-crack remediation guidance for moisture state M. The infrared contribution populates a \texttt{MeasuredIndicator} that corroborates the active-leakage assessment but does not by itself alter the prescribed intervention category at this defect, since moisture state M already implies active moisture, its role is to harden the confidence in the RGB-derived moisture-state code. The GPR contribution populates the \texttt{DefectCondition} layer with \texttt{Delamination} or through-thickness \texttt{CrackPropagation} (subsurface extent through the lining
+thickness), which the FMEA chain rule treats as a structural indicator requiring grout injection extending to the upper bound of the subsurface reflection rather than surface-only sealing. The fused prescription is chemical-grout injection through the lining thickness with the surface crack re-sealed afterwards, rather than the RGB-only surface seal alone.
+
+This case demonstrates two points that generalise beyond the primary worked example of Section~\ref{sec:res_demo}. First, the multimodal escalation pattern is FMEA-chain-specific: at the primary worked example the thermal modality drives the L3-to-L5 escalation, whereas at the second case the GPR modality drives the same escalation through a different ontology entity (\texttt{Delamination} or \texttt{CrackPropagation} rather than the primary case's \texttt{Delaminations(extended)} + \texttt{VoidBehindLining}). The chain mechanism is general and the
+particular modality that triggers escalation depends on the defect. Second, the role of each modality is not interchangeable: the infrared contribution at the second case is corroborative (strengthening an existing assessment) rather than escalatory (introducing a new chain level), illustrating that the framework's value at any one defect is determined by the specific FMEA-chain levels that each modality populates rather than by a uniform multimodal-superiority claim.
+
+To quantify the marginal contribution of each modality to the final prescription, five inspection-configuration ablations are evaluated against the fused four-modality baseline at the chainage~1250~m defect. The configurations correspond to typical operator deployment patterns: RGB-only inspection (current baseline practice), RGB+RGBD (where laser scanning has been adopted), RGB+thermal (where thermography is added for moisture diagnosis), RGB+GPR (where lining structural integrity is suspected), and the fused four-modality assessment.
+
+\begin{table}[htbp]
+\centering
+\caption{Ablation analysis at chainage~1250~m: prescription quality
+  across five inspection configurations. Each row reports the
+  configuration's deviation from the four-modality fused baseline.}
+\label{tab:ablation}
+\begin{tabularx}{\textwidth}{p{2.3cm} p{2.7cm} p{2.3cm} p{1.5cm} X}
+\toprule
+\textbf{Config.} & \textbf{Intervention tier} & \textbf{Repair scope}
+  & \textbf{Steps} & \textbf{Errors versus fused baseline} \\
+\midrule
+RGB only & Standard spall repair & 185~cm$^2$ & 3 & Subsurface
+  delamination missed; void unaddressed; defect under-described \\
+RGB + RGBD & Standard spall repair & 185~cm$^2$ & 3 & Same errors as
+  RGB; geometry refined but no qualitative change in prescription \\
+RGB + Thermal & Extended-scope repair & approximately 590~cm$^2$ &
+  4 & Repair scope correct; void unaddressed (formation grout step
+  missing) \\
+RGB + GPR & Standard spall repair with formation grouting &
+  185~cm$^2$ & 4 & Void addressed; subsurface delamination extent
+  under-estimated \\
+RGB+RGBD+ Thermal+GPR (fused) & Extended-scope repair with formation
+  grouting & approximately 590~cm$^2$ & 5 & \textbf{(baseline)} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Three observations follow from Table~\ref{tab:ablation}. First, RGBD adds dimensional precision but no qualitative change in prescription
+relative to RGB-only at this defect, since RGBD's level coverage overlaps RGB's coverage at level~4 only. Second, either thermal or GPR alone added to RGB recovers a more conservative intervention tier than RGB-only, but for different reasons: thermal extends the repair boundary via subsurface delamination evidence (an L3-to-L5 path), and GPR adds the formation-grouting step via void and reduced-cover evidence (an L4-to-L5 path). Third, only the four-modality combination yields both the correctly extended repair boundary \emph{and} the formation-grouting step; omitting GPR loses the void-driven repair sequencing, and omitting thermal loses the correct repair-area scope. Each modality contributes irreducible information to a different stage of the causal chain, and dropping any modality leaves a stage under-determined.
+
+The two case studies presented (the primary worked example of Section~\ref{sec:res_demo} and the second case above) exercise three of the four imaging modalities as the source of multimodal escalation: thermal at the primary worked example, GPR at the second case, with RGBD providing geometric confirmation in both. The framework's architecture is not specific to imaging modalities, non-imaging contact NDT such as acoustic-tension testing of ceiling-hanger anchors (\texttt{MeasurementTechnique:AcousticEmission} in the Maintenance ontology), ultrasonic pulse velocity for delamination mapping, or impact-echo for void detection are accommodated by the same FMEA-chain mapping, populating \texttt{MeasuredIndicators} through ontology classes already present in the TBox. Such NDT was outside the scope of the case study campaign, thus the ontology's support for it is design-level rather than empirical.
+
+\subsection{Serviceability aggregation}
+\label{sec:serviceability}
+
+The component-level multimodally-integrated condition produced by the framework (Section~\ref{sec:integration}) is aggregated to subsystem and tunnel level to support investment prioritisation. The aggregation is defined on \emph{intervention-urgency tiers} rather than on RADS condition grades, because the framework's authoritative defect representation is the AASHTO severity-code set (Section~\ref{sec:rads_onto}) and the framework does not hard-map AASHTO codes to the broad RADS bands. The aggregated index is named the \emph{deterioration index} $D$ (with $D=5$ most severe) rather than a serviceability index, to avoid the conventional expectation that higher values denote better condition.
+
+Each FMEA chain's Level-7 intervention category is mapped to a five-level urgency tier: $D=1$ refers to preventative and no defect detected, which requires routine surveillance only; $D=2$ refers to monitoring with re-inspection (e.g., transverse crack, D or PM moisture state); $D=3$ refers to standard scope repair (e.g., spall at construction joint with M moisture); $D=4$ refers to rehabilitation/action\_required (e.g., spall with GS/F moisture and subsurface delamination (multimodal escalation), active leakage at GS/F state, inclined structural cracks); $D=5$ refers to emergency/emergency\_closure (e.g., \texttt{no\_ring} ceiling-hanger acoustic test combined with section loss; loose rock requiring immediate scaling). The tier is a property of the active defect, not of the component; it is derived deterministically from the AASHTO-coded defect through the FMEA chain rather than re-elicited from the assessing engineer.
+
+For component $i$ with one or more active defects of tiers $\{d_{i,1}, d_{i,2}, \dots\}$, the component-level urgency $C_i$ is defined by the maximum-tier rule:
+\begin{equation}
+  C_i \;=\; \max_{k} \, d_{i,k},
+  \label{eq:component_tier}
+\end{equation}
+which reflects the operational reality that a component's maintenance schedule is determined by its most urgent defect rather than by an average across defects. A component with no detected defects has $C_i = 1$.
+
+The subsystem deterioration index for subsystem $j$ is the component-weighted mean of constituent component urgencies:
+\begin{equation}
+  D_j \;=\; \frac{\sum_{i \in \text{components}(j)} w_i\,C_i}
+                  {\sum_{i \in \text{components}(j)} w_i},
+  \label{eq:subsystem}
+\end{equation}
+where $C_i$ is the component-level urgency of Equation~\ref{eq:component_tier} and $w_i$ is a \emph{component-level} structural-significance weight, fixed per component independently of the active defect set. The component-level weight is derived from the component's role in the tunnel's load-bearing or life-safety system: principal structural elements (lining segments, ring beams, ceiling hangers) carry $w_i=1.0$; secondary structural elements (joint covers, drainage gratings) carry $w_i=0.5$; non-structural surface elements carry $w_i=0.2$. The three-level scheme is a deliberate simplification; operators with more detailed structural-significance policies can substitute their own per-component weights without changing the form of Equation~\ref{eq:subsystem}.
+
+The tunnel-level deterioration index aggregates subsystem indices through subsystem weights $\omega_j$:
+\begin{equation}
+  D_{\text{tunnel}} \;=\; \sum_{j \in \text{subsystems}}
+    \omega_j\,D_j ,
+  \qquad \sum_j \omega_j = 1.
+  \label{eq:tunnel}
+\end{equation}
+The subsystem weights $\omega_j$ are jurisdiction- and operator-policy-dependent. The present study assumes indicative values $\omega_{\text{lining}}=0.6$, $\omega_{\text{drainage}}=0.20$, $\omega_{\text{waterproofing}}=0.15$, $\omega_{\text{ventilation}}=0.10$, and $\omega_{\text{ancillary}}=0.10$, reflecting the lining's dominant structural role; these are reported as placeholders and require calibration against structured expert elicitation and historical maintenance records before operational deployment. The aggregation is illustrated in Figure~\ref{fig:serviceability}.
+
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{Fig_PDF/Fig_13_Serviceability Aggregation Framework.pdf}
+  \caption{Serviceability aggregation from component-level multimodal AASHTO-coded condition through subsystem indices to tunnel-level priority. The annotation at chainage~1250~m shows the intervention-tier escalation enabled by the multimodal integration layer.}
+  \label{fig:serviceability}
+\end{figure}
+
+
+% =====================================================================
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{Value of the multimodal integration layer}
+
+The integration layer's central claim is supported by the worked examples of Section~\ref{sec:res_demo} and Section~\ref{sec:generalisation}. Each modality maps to a distinct part of the FMEA chain: RGB identifies the defect class, RGBD quantifies the geometry, thermal contributes subsurface extent and cause evidence, and GPR characterises the lining interior. No single modality covers the chain alone. At the worked example, the integration produces three measurable improvements over single-modality assessment (Table~\ref{tab:comparison}): an enriched AASHTO defect-code set that escalates the intervention tier from standard spall repair to extended-scope repair with formation grouting; a 3.2$\times$ repair-scope expansion at that location; and an added GPR-informed step. The second case (Section~\ref{sec:generalisation}) show analogous tier-escalation through a different evidence pathway (GPR-detected through-lining crack propagation), supporting the claim that semantic-level integration changes prescriptions even when the decisive complementary modality differs. The magnitude of the scope expansion is, however, defect-specific and should not be generalised from a single case.
+
+This contrasts structurally with signal- and feature-level fusion (Table~\ref{tab:fusion_levels}). Signal-level fusion aids visual interpretation but does not connect to maintenance decisions. Feature-level fusion enhances detection performance but leaves decision logic external. Semantic-level integration connects observations to causes, thresholds, and interventions through a queryable, auditable reasoning chain. A practical consequence is reduced specialist burden: integrating GPR, thermal, and RGB data for a single defect currently requires three specialists to process their data products separately and reconcile findings manually. The ontology provides a shared schema that maps each specialist's output directly to structured entities, reducing cycle time from data collection to maintenance decision.
+
+The extraction pipeline of Section~\ref{sec:llm_pipeline} is engine-agnostic by design. The primary cloud engine (Claude Opus~4.7) was selected to maximise extraction quality on non-sensitive standards material; operators bound by data-sovereignty, audit, or procurement constraints can use the same prompts and schema with open-weight Qwen models~\citep{Qwen2024} and Gemma models~\citep{gemma4_2026} served on-premise via Ollama~\citep{Ollama2024}, keeping knowledge-base construction within the operator's network. Both paths share the four-criteria expert validation; the framework's downstream layers (ontology, modality mapping, integrated assessment, and prescription) are unchanged regardless of which engine populates the TBox. Table~\ref{tab:llm_comparison} reports the cross-engine comparison.
+
+To assess the data-sovereignty deployment path, the extraction pipeline was re-executed on-premise using three local engine configurations on a workstation equipped with an NVIDIA A5000 GPU (24\,GB VRAM): a single-model configuration using Qwen3-VL:30B for both text and vision tasks (Local~A); a split configuration using Qwen2.5:32B for text extraction and Qwen3-VL:30B for vision (Local~B); and a second split configuration substituting Gemma4:31B for text extraction while retaining Qwen3-VL:30B for vision (Local~C). All configurations operated at temperature~=~0, seed~=~42, and a context window of 16,384 tokens, with source text chunked at 6,000 characters per call to remain within the available context budget. Local-engine runs were executed in April-May 2026. The same six FMEA chains and prompt schema used for the cloud extraction were applied without modification. Several factors account for the precision gap between the local and cloud engines visible in Table~\ref{tab:llm_comparison}. The local models at 19-20\,GB operate at the boundary of available VRAM, producing partial CPU spillover that extended the total batch time to between 1.48 and 8.75 hours and reduced effective context windows, preventing each call from seeing the full chapter structure. None of the local text models reliably distinguished the rehabilitation FMEA scope of Chapter~16 from the geotechnical instrumentation content of Chapter~15, resulting in out-of-scope extraction rates of 57.9\%, 75.0\%, and 65.5\% for Local~A, B, and~C, respectively, a reasoning limitation absent in the cloud engine. Quantitative threshold extraction at L6 varied substantially across configurations: Local~B achieved only 10.5\% precision on threshold values, while Local~A and Local~C reached 83.3\% and 87.5\% respectively, compared to 85.7\% for Claude Opus~4.7. The low precision of Local~B is attributable to the conservative extraction discipline of Qwen2.5:32B, which consistently populated the threshold field structure but returned null values when a numeric criterion was not explicitly present in the current chunk, rather than inferring it from context or pretraining knowledge.  A further difference emerged in Local~C, which extracted exactly one record per chunk regardless of content, indicating over-extraction rather than selective identification, in contrast to Local~B, which correctly returned zero records for nine non-FMEA chunks. Vision extraction remained stable across all configurations: all three processed all inspection images successfully at FMEA levels L3 and L4, with consistent identification of high-severity defects, including two S-2 spalls and an active leakage site, though moisture state assignment at the most severe leakage image varied between F (Local~A and~B) and D (Local~C), and all three diverged from the cloud engine ground truth of PM, which correctly identified the surface deposits as dry efflorescence rather than active leakage.
+
+The vision row of Table~\ref{tab:llm_comparison} carries a more limited evidentiary load than the textual rows above it. All three local engine configurations processed the inspection-image set without parse failure and agreed with the cloud engine on the principal level-3 defect-class assignments (two S-2 spalls, one active leakage site), which is the coverage-level claim that any future vision-language model perception layer (Section~\ref{sec:future}) would require at this stage. The contested moisture-state judgement on IMG\_1440 is the kind of disagreement that the framework's conflict-resolution rule (Section~\ref{sec:integration}) is designed to route to expert adjudication rather than commit silently to the ABox. Precision validation at deployment scale, including expert-adjudicated ground truth and confidence intervals matching the reporting convention of Table~\ref{tab:precision}, is identified as a follow-on study in Section~\ref{sec:future}.
+
+\begin{table*}[htbp]
+\centering
+\begin{threeparttable}
+\caption{Comparison of cloud and local multimodal LLM configurations for hierarchical information extraction. Cloud runs used Claude Opus~4.7 (Anthropic API identifier \texttt{claude-opus-4-7}) in April-May 2026; local runs were executed in the same period on a workstation equipped with an NVIDIA A5000 GPU (24\,GB VRAM).}
+\label{tab:llm_comparison}
+
+\small
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.15}
+
+\begin{tabularx}{\textwidth}{
+>{\raggedright\arraybackslash}p{3.4cm}
+>{\centering\arraybackslash}X
+>{\centering\arraybackslash}X
+>{\centering\arraybackslash}X
+>{\centering\arraybackslash}X
+}
+\toprule
+\textbf{Metric} &
+\textbf{Claude Opus 4.7} &
+\textbf{Local A Qwen3-VL-30B} &
+\textbf{Local B Qwen2.5:32B + Qwen3-VL-30B} &
+\textbf{Local C Gemma4:31B + Qwen3-VL-30B} \\
+\midrule
+
+Total records extracted & 42 & 19 & 20 & 29 \\
+
+Ch16 chains matched, partial or better & 6/6 & 4/6 & 5/6 & 5/6 \\
+
+Record acceptance rate (all seven fields correct) & 92.9\% & 84.1\% & 79.1\% & 87.4\% \\
+
+L1 Component precision & 100\% & 89.5\% & 95.0\% & 96.6\% \\
+
+L2 Mechanism precision & 100\% & 89.5\% & 85.0\% & 93.1\% \\
+
+L3 Defect precision & 97.6\% & 89.5\% & 90.0\% & 96.6\% \\
+
+L4 Indicator precision & 100\% & 68.4\% & 95.0\% & 62.1\% \\
+
+L5 Cause precision & 100\% & 84.2\% & 90.0\% & 86.2\% \\
+
+L6 Threshold precision & 85.7\% & 83.3\% & 10.5\% & 87.5\% \\
+
+L7 Intervention precision & 100\% & 84.2\% & 85.0\% & 89.7\% \\
+
+Out-of-scope rate, Ch15 & 0\% & 57.9\% & 75.0\% & 65.5\% \\
+
+Over-extraction, zero-record chunks & 0 & 2 chunks & 9 chunks & 0 chunks \\
+
+Total text time\tnote{a} & Cloud API & $\sim$8.75 hr & $\sim$1.48 hr & $\sim$6.53 hr \\
+
+Vision: 11/11 images & $\checkmark$ & $\checkmark$ & $\checkmark$ & $\checkmark$ \\
+
+IMG\_1440 moisture code & PM $\checkmark$ & F $\checkmark$ & F $\checkmark$ & D $\times$ \\
+
+\bottomrule
+\end{tabularx}
+
+\begin{tablenotes}[flushleft]
+\footnotesize
+\item[a] Cloud extraction in this study was conducted as a single conversational pass over AASHTO-relevant chapters, with the full document available in context. Local engines were run as batched executions of Algorithm~\ref{alg:llm} with 6,000-character chunking. Precision metrics in Table~\ref{tab:llm_comparison} are directly comparable; throughput metrics, namely total text time, are not directly comparable, and the cloud entry is therefore reported as ``Cloud API'' rather than elapsed runtime.
+\end{tablenotes}
+
+\end{threeparttable}
+\end{table*}
+
+\subsection{Industry deployment pathway}
+\label{sec:industry}
+
+The framework is implemented in two complementary forms: a research demonstration whose architecture is described in Section~\ref{sec:res_demo}, and an industry deployment pathway whose components are itemised here. For industry deployment, the framework is \emph{designed} as a five-layer reference stack (Figure~\ref{fig:deployment_roadmap}) whose storage, reasoning, validation, and perception layers replace the reference build's lightweight equivalents with operational infrastructure. The storage layer is an RDF triplestore (for example GraphDB, Stardog, or Apache Jena Fuseki) that hosts the same three-ontology TBox and ABox without modification. The knowledge-access layer exposes a SPARQL~1.1 endpoint, supplemented by SHACL~\citep{w3c2017shacl} shapes that enforce ABox integrity constraints (for example, that a \texttt{DefectCondition} must have at least one \texttt{MeasuredIndicator}, and that an \texttt{Intervention} must reference a \texttt{Threshold} whose value the indicator crosses). The reasoning layer is an OWL~2~\citep{w3c2012owl2} reasoner (HermiT~\citep{glimm2014hermit} or Pellet~\citep{sirin2007pellet}) providing full OWL~2~EL/DL expressiveness, with the SWRL rules of Appendix~\ref{app:swrl} executed by a SWRL engine to fire threshold and conflict-resolution rules when ABox values cross specified boundaries. The multimodal preprocessing layer of the deployment stack comprises modality-specific pipelines: CNN-based RGB defect detection, point-cloud feature extraction for L4 measurements, thermal anomaly segmentation, and CNN-based GPR radargram interpretation, each emitting RDF triples conforming to the TBox without manual transcription. The operator-interface layer extends the research dashboard by adding BIM-viewer integration and two-way links with a computerised maintenance management system; the BIM coupling is already prototyped in the reference build through IFC4 export with ontology-classified defect elements (Section~\ref{sec:res_demo}). Between the in-process reference build and this production stack, a reference application-programming-interface layer with role-based access control, per-operator (multi-tenant) data isolation, and an append-only audit log of every work-order creation and approval provides the access-control and governance surface that an operator's information-security review requires. The production system preserves the same ontology, modality mappings, and SWRL rules used in the reference build. Moving from the research demonstration to operational deployment therefore mainly involves replacing the lightweight runtime components with production-ready infrastructure, rather than redesigning the framework itself.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{Fig_PDF/Fig_14_Industry Deploymnet Roadmap.pdf}
+  \caption{Industry deployment roadmap from research deployment integrating JAVA-scripted applications consisting of storage layer, knowledge access and validation layer, multimodal processing layer, reasoning layer, and operator interface; reflecting enabling software environments for the framework.}
+  \label{fig:deployment_roadmap}
+\end{figure}
+
+Practical adoption alongside existing operator workflows is determined by several factors. The asset register: the COBie ABox aligns with operator asset registers via RADS-compliant \texttt{AssetID} mapping (axiom A1); existing data is imported by transformation rather than replacement, with no operator-side schema redesign. Inspection workflows: existing data-collection procedures are preserved, and the framework adds an ontology-mapping post-processing step. RGB and RGBD outputs need only metadata enrichment to populate the ABox; thermal and GPR outputs use modality-specific interpretation templates that existing specialist contractors can apply. Maintenance management: FMEA-chain prescriptions export as work orders in CMMS-compatible XML or JSON via axiom A2.
+
+The following acceptance criteria are proposed for an operator-led pilot evaluation, with indicative target values intended as starting points for operator-specific calibration. These targets are working hypotheses to be refined against the baseline established in the pilot's first measurement window, not contractually binding levels.
+
+\begin{itemize}[leftmargin=*]
+\item \textbf{Cycle time from inspection to work-order issue.}
+Working target: a reduction of at least 30\% in median cycle time relative to the operator's current manual-reconciliation baseline within twelve months of go-live, measured from inspection-event timestamp to work-order issuance timestamp on a matched-defect-class basis. The rationale for a 30\% target is that the framework eliminates the dominant manual step (cross-specialist reconciliation of RGB, thermal, and GPR findings), which on the case-study tunnel accounted for an estimated one-third to one-half of inspection-to-work-order elapsed time; a 30\% reduction is a conservative reflection of removing that step alone, before any downstream automation benefits.
+
+\item \textbf{Defect-evidence enrichment.}
+Working target: in at least 20\% of inspections deploying more than one modality, the multimodal data adds AASHTO codes beyond the RGB-only set, escalating the prescribed intervention tier. The 20\% figure is grounded in the case-study observation that both documented defects (Section~\ref{sec:generalisation}) showed tier escalation, but that the case-study tunnel was specifically selected for documented multimodal-relevant defects and is therefore not representative of the population frequency. Multi-tunnel deployment will establish operator-specific baselines; the 20\% figure is offered as a starting hypothesis.
+
+\item \textbf{Re-intervention rate.}
+Working target: a reduction in the proportion of repaired defects requiring re-treatment within five years, with the rate falling below the operator's existing five-year re-intervention baseline. The mechanism is the corrected repair-scope expansion shown in the worked example (3.2$\times$ at that defect), which addresses a known cause of re-deterioration~\citep{Watase2015}. The five-year window matches typical inspection-cycle intervals for major road tunnels; setting a numeric reduction target requires the operator's historical baseline, which is established during pilot deployment.
+
+\item \textbf{Inspection coverage.}
+Working target: at least 95\% of tunnel structural components have ABox records updated within the operator's nominal inspection-cycle interval. The 95\% figure reflects the practical observation that full 100\% coverage is rarely achieved in operating tunnels due to access constraints (live traffic lanes, ventilation equipment obstructions), and a 5\% allowable shortfall is consistent with current operator practice.
+\end{itemize}
+
+These working targets are reported here as anchor points for pilot-phase contracting and are subject to operator-specific calibration. Where any target proves materially mis-calibrated against operator baseline data, the pilot's first quarter is the appropriate point at which to re-set the level rather than at the point of agreement.
+
+\subsection{Portability to other regulatory contexts}
+
+The framework presented in this paper has three structurally distinct layers, and they differ in the work required to port them to a new regulatory context. The \emph{meta-framework}, comprising the seven-level FMEA chain (Equation~\ref{eq:fmea_chain}), the three-ontology architecture (Section~\ref{sec:onto_overview}), the modality-to-ontology mapping (Section~\ref{sec:integration}), and the cross-ontology alignment axioms (Section~\ref{sec:semantic_links}), is jurisdiction-independent: it encodes a generic prescriptive-DT pattern for tunnel maintenance rather than the content of any specific national standard. The \emph{extraction pipeline} (Section~\ref{sec:llm_pipeline}) is also jurisdiction-independent in design, although it must be re-executed against each national standards corpus, with controlled vocabularies extended for jurisdiction-specific terminology and units. Only the \emph{populated TBox and ABox} are jurisdiction-specific.
+
+The Australian instantiation reported here already integrates a non-Australian source: AASHTO~DCRT~\citep{AASHTO2009} provides the defect-level FMEA granularity that Austroads guidance does not, and is combined with Austroads RADS~\citep{AustroadsRADS2022} for asset-management context. This hybrid demonstrates that the cross-ontology alignment axioms (A1-A5, Table~\ref{tab:alignments}) accommodate sources of mixed national origin without modification, provided that each source maps cleanly to one of the three ontology layers (defect-level FMEA, asset-management context, or construction-to-operations handover).
+
+For an operator in another jurisdiction, the porting effort is bounded by three tasks. First, identify the national counterparts of the three source roles: a defect-level prescriptive standard (the AASHTO/Austroads role), an asset-management data standard (the RADS role), and a construction-to-operations handover schema (the COBie role). Section~\ref{sec:lit_intl} surveys candidate counterparts in the major tunnel-operating jurisdictions. Second, re-run the extraction pipeline of Section~\ref{sec:llm_pipeline} against the substituted corpus, with the four-criteria expert validation conducted by reviewers familiar with the substituted standards. Third, extend controlled vocabularies for jurisdiction-specific severity codes and unit conventions; the extension does not require schema redesign because the pipeline is schema-guided rather than vocabulary-fixed. The downstream layers, including modality-to-ontology mapping, conflict resolution, FMEA traversal, and the deployment specification, are unchanged. The multimodal integration layer in particular is jurisdiction-independent because the four routine modalities (RGB, RGBD, thermal, GPR) are in international use and probe the same physical phenomena regardless of regulatory context.
+
+Two cautions need to be applied. International and national regulations are typically not directly inter-translatable: AASHTO spall codes S-1 to S-4 do not correspond one-to-one with, for example, the JRA A/B/C/S grades or the DMRB Severity~1 to~4 bands. The framework's design choice to retain AASHTO codes natively in the Maintenance ABox (Section~\ref{sec:rads_onto}) reflects this non-translatability and generalises: each national instantiation should retain its own authoritative defect representation rather than collapsing to a common scale. Quantitative thresholds (crack widths, section-loss percentages, cover depths) differ across jurisdictions and require jurisdiction-specific re-extraction; the level-6 precision metric reported in Table~\ref{tab:precision} should be re-evaluated on the substituted corpus.
+
+\subsection{Limitations and future directions}
+\label{sec:future}
+
+Several limitations qualify the present study: (1) the demonstration is on three defects from three-lane road tunnel of a specific construction type and geological setting. Generalisation to steel-segment metro tunnels, cut-and-cover sections, and other geologies requires case-study expansion; (2) the integration is demonstrated through three worked examples and an inspection-configuration ablation at one defect, not through whole-tunnel automation. Scaling requires automated per-modality detection pipelines emitting ontology-aligned labels; (3) the current TBox covers corrosion, leakage, structural cracking, hanger failure, and rock reinforcement deterioration, which represent the majority of maintenance interventions in operating road tunnels~\citep{AASHTO2009}. Fire damage, chemical attack (such as ASR and sulfate), fatigue, biological deterioration, and pavement defects are not yet covered; the same pipeline applies to their extension, with the AGRT~\citep{Austroads2024} as the primary additional source; (4) the textual extraction pipeline's precision metric (92.9\%, Table~\ref{tab:precision}) reflects validation against source-text presence and four-criteria expert review, not engineering-truth correctness in the field. The Cohen's $\kappa$ claim that previously accompanied this metric has been withdrawn: a meaningful $\kappa$ requires a substantially larger rater sample with deliberate edge-case inclusion, which was not feasible within the present project timeline because of the narrow availability of dual-qualified reviewers (tunnel maintenance experience plus FMEA-schema familiarity). A multi-rater study with target n$\geq$30 and explicit edge-case sampling is identified as a near-term follow-on activity. Re-validation against updated model versions is required before operational re-deployment; (5) the framework's output is at the level of intervention category with provenance to source-standard clauses (for example, ``extended-scope repair with formation grouting; AASHTO~\S16.4.3 threshold trigger''); recipe-level prescription with materials, mix designs, injection pressures, and detailed sequencing remains the responsibility of the specifying maintenance engineer. The framework is therefore better described as decision-support for prescriptive maintenance planning, rather than as a fully autonomous prescriber; (6) the framework supports descriptive and prescriptive DT capability at the present level of evidence but stops short of forecasting future deterioration.
+
+The natural extensions of this work fall into several lines. \emph{Automated ABox population via modality-specific pipelines.} Calibrated point-cloud feature extraction for RGBD geometry, thermal-anomaly segmentation with quantitative temperature fields, and CNN-based GPR radargram interpretation for void geometry and rebar reflections should be implemented, with output classes that align with the existing TBox so that their outputs populate level-4 quantitative indicators directly. SPARQL and SWRL rule implementation should be completed in parallel, with SHACL constraints for ABox integrity. \emph{Vision-language model perception layer.} Recent vision-language models (VLMs) suggest a complementary route in which inspection images are converted directly into schema-aligned ABox entries through a structured prompt encoding the AASHTO defect taxonomy. A VLM perception layer is prototyped in the reference build as a human-in-the-loop ingest step (Section~\ref{sec:res_demo}): the model's schema-aligned output pre-fills the AASHTO-coded fields for expert confirmation rather than populating the ABox unsupervised, and the same structured-output parser accepts an on-premise open-weight model or a cloud engine interchangeably. It was not, however, advanced to a validated, unsupervised contribution, for three reasons that also bound the present scope. (i) Current frontier VLMs perform unevenly across the perception tasks the framework requires: while schema-aligned classification and qualitative description are within reach, quantitative measurement (spall depth in millimetres, crack width to 0.1\,mm) is not, and specialised non-photographic modalities such as GPR radargrams differ structurally from the natural images on which VLMs are pretrained. Promising VLM use is therefore confined to a subset of perception tasks rather than the full perception pipeline. (ii) Quantitative validation of VLM precision at deployment scale was not feasible within the project timeline. Such validation requires expert-adjudicated ground truth on a stratified inspection-image sample with per-field precision, hallucination rate, and inter-engine agreement reported under the same convention as Table~\ref{tab:precision}, together with a sample size large enough to support Wilson confidence intervals at the same width as the textual pipeline. The expert-adjudication effort exceeds the budget allocated to the present study and is necessarily a follow-on activity. (iii) Including the VLM layer prematurely would risk over-claiming on the basis of the cloud-versus-local sanity-check results in Table~\ref{tab:llm_comparison}, where the cloud engine's output served as a proxy ground truth on inspection images. This is acceptable for coverage verification but circular as a precision claim, and was therefore reported in this paper only as evidence that the layer composes with the existing pipeline, not as evidence of VLM precision. The acceptance criteria for unsupervised operational use of a VLM perception layer (aggregate level-3 precision matching or exceeding the textual pipeline's 92.9\%, lower confidence bound above 80\%, hallucination rate below 5\%) are noted here so that the follow-on study has a defined gating threshold. \emph{Larger inter-rater validation.} A multi-rater study (n$\geq$30 records, deliberate edge-case inclusion, broader pool of dual-qualified reviewers) is needed to support a defensible Cohen's $\kappa$ for the extraction pipeline. \emph{Time-series deterioration modelling.} A time-series deterioration model using historical inspection records would enable projection of future condition states and cross the predictive-prescriptive DT boundary. \emph{Weight calibration.} The serviceability weights $w_i$ and $\omega_j$ in Equations~\eqref{eq:subsystem}-\eqref{eq:tunnel} require calibration through structured expert elicitation and against historical maintenance decisions. \emph{Broader chain coverage.} The extraction pipeline should be applied to the AGRT and to additional mechanism domains (fire, ASR, fatigue deterioration). \emph{Operational pilot.} Pilot deployment with an Australian tunnel operator should validate the acceptance criteria of Section~\ref{sec:industry}. In the longer term, operational twins should be deployed across multiple tunnels in a network, with multi-tenant SHACL constraint configurations that support variation in operator practices. Extension to other underground infrastructure types (heavy and light rail tunnels, utility tunnels, pedestrian underpasses) is enabled by the modular ontology architecture and the transferable extraction pipeline. A national-scale knowledge graph linking Australian operating tunnels could support comparative analytics and shared learning across operators. Beyond exisiting assets, the same knowledge structure could also be adopted in the development of new tunnels, where metadata on materials, properties, and performance requirements, such as fire ratings, could form complete material passports that would enrich asset information requirements and asset information models during project delivery, enabling knowledge captured in design and construction to support future operation, maintenance, and lifecycle decision-making.
+
+% =====================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+This paper presents a serviceability-oriented framework for a prescriptive digital twin in road-tunnel maintenance. The framework integrates an OWL~2 ontology aligning AASHTO, Austroads-RADS, and COBie standards with an LLM-assisted pipeline that populates the ontology from AASHTO narrative standards. A multimodal sensing layer maps RGB, RGBD, thermal, and GPR data to distinct entry points along the seven-level FMEA chain, and a deployment specification covers software stack, workflow integration, training, and acceptance criteria. The case-study tunnel illustrates that single-modality inspection can fundamentally under-prescribe what the lining requires. At the worked-example defect, RGB-only assessment yielded a standard spall repair over 185~cm$^2$, whereas the four-modality fused assessment escalated this to extended-scope repair with formation grouting over approximately 590~cm$^2$, a qualitative shift in intervention rather than a marginal refinement.
+
+The work contributes to advance design of tunnel digital twin. First, the seven-level FMEA chain itself replaces the severity–occurrence–detection scoring of IEC~60812:2018 with an evidence-traceable reasoning path from component through to intervention. This makes the prescription auditable in the sense that any L4 or L5 intervention can be traced back to the specific defect-code, indicator, and threshold that justified it, rather than emerging from a composite numerical score whose constituents are no longer recoverable. Then, the framework treats the large language model as a schema-guided populator of a domain ontology, rather than as an end-to-end extractor. The schema is defined by engineers and consists of the seven-level causal chain, together with controlled vocabularies for components, defects, indicators, and interventions. Within this structure, the LLM fills predefined slots using information extracted from narrative standards, and the outputs are then validated by human experts against four acceptance criteria. This differs from free-form extraction approaches commonly reported in recent literature, where the LLM may generate unconstrained relationships or categories. In the proposed framework, ontology population remains traceable to source standards and predefined engineering schema elements, rather than to opaque or unverified associations inferred by the LLM. In addition, each sensing modality is assigned to a specific entry point on the chain rather than a fusion of modalities at the decision level. The ablation analysis of Section~\ref{sec:generalisation} shows that the modalities provide complementary evidence for different stages of the chain. For example, RGB modality may identify a visible defect, while thermal modality may reveal its subsurface extent and GPR modality may indicate a likely causal mechanism. Removing a modality therefore does not merely reduce the confidence of a diagnosis, it may lose the ability to determine a specific cause altogther. This explains why the framework can produce prescriptions that differ substantively from single-modality prescriptions. Finally, the framework preserves  severity codes in AASHTO's DCRT as the authoritative representation of defects, while using the jurisdictional RADS as an overlay rather than forcing a one-to-one hard mapping between code systems. This avoids information loss during code translation and maintains the relationship between each defect code and its corresponding FMEA chain. As a result, the core defect ontology remains stable, while jurisdiction-specific requirements can be accommodated substituting or extending the jurisdictional overlay. This design allows the framework to operate across different jurisdictions without requiring the defect ontology to be rebuilt.
+
+The framework serves as a reference for future research on automated tunnel-maintenance schemes. Three directions follow naturally. The most immediate is extension of the schema-guided LLM-population pattern to additional asset classes (rail tunnels, mined tunnels, immersed-tube tunnels, and the parallel network of bridges and culverts), where the seven-level chain can be retained as the reasoning backbone and only the standards corpus and controlled vocabularies need substitution. Second is the integration of time-series condition monitoring, where the current snapshot-of-defects ABox is extended into a temporal ABox capturing the progression of indicators between inspections, turning the prescriptive prescription into a predictive-prescriptive prescription that anticipates the next intervention rather than only prescribing the current one. Third is the formal coupling of the ontology layer to digital-twin geometry and BIM viewers, so that the prescription returned by the FMEA chain renders in the operator's spatial context rather than in a defect register alone; the reference build takes a first step in this direction through IFC4 export in which each defect element references its ontology class, and a three-dimensional lining viewer that places defects at their surveyed chainage and cross-section position. Each of these directions inherits the four design choices above without modification to the ontology core, which is itself an argument for the architectural separation the framework establishes.
+
+For practitioners and asset owners, the framework offers a path that does not require replacement of established inspection practice. Current AASHTO-based inspection continues to produce the authoritative defect coding, and the framework adds an interpretation layer that converts those codes into prescriptive interventions with auditable provenance. Inspection campaigns that have already adopted laser scanning, infrared thermography, or ground-penetrating radar acquire additional value under the framework because their data streams populate ontology entities that the FMEA chain consumes directly. Operators that have not yet adopted these modalities can phase them in incrementally, because each modality contributes a distinct chain entry point and the framework continues to function on any non-empty subset of the four. The acceptance criteria proposed in Section~\ref{sec:industry} are written to align with existing tunnel-management procurement language, so that adoption becomes a tender specification rather than a research collaboration. This is the form in which the transition from predictive to prescriptive digital twins becomes operationally feasible at the network scale that the engineering profession will need over the coming decade.
+
+% =====================================================================
+\section*{Acknowledgements}
+The authors acknowledge the support of the asset client for facilitating access to the case study
+tunnel for the multimodal sensing campaign, and of industry
+partners who contributed to validation of the FMEA extraction
+results.
+
+\section*{Declaration}
+The authors declare no competing interests.
+Large language models (LLM) were used in this work in two distinct capacities. As part of the research methodology, Anthropic Claude (Opus~4.7) was used for schema-guided extraction of FMEA reasoning chains from maintenance standards under expert validation; this use is described in full in Sections~\ref{sec:llm_pipeline} and~\ref{sec:discussion}, including model version, run dates, and decoding configuration. Separately, a large language model was used to assist with language editing and readability during manuscript preparation. After using these tools, the authors reviewed and edited all such content as needed and take full responsibility for the content of the publication.
+
+\section*{Data Availability}
+\label{sec:data_avail}
+The ontology files (OWL~2.0), the extracted FMEA chains and deterioration taxonomy (JSON), and the SPARQL queries used for competency-question validation are available in a supplementary repository upon publication. Multimodal sensing data from the case study tunnel are subject to operator confidentiality and cannot be released.
+
+% =====================================================================
+\bibliographystyle{plainnat}
+\bibliography{tunnel_references}
+
+% =====================================================================
+
+\newpage
+\appendix
+
+\section{LLM-assisted extraction pipeline (pseudocode)}
+\label{app:llm}
+
+The pseudocode for the LLM-assisted extraction pipeline of
+Section~\ref{sec:llm_pipeline} is given as
+Algorithm~\ref{alg:llm}. The pipeline takes a standards corpus
+together with a target schema and controlled vocabulary, and
+returns the validated FMEA-chain set together with an audit log.
+
+\begin{algorithm}[htbp]
+\caption{Schema-guided FMEA extraction with expert validation.}
+\label{alg:llm}
+\begin{algorithmic}[1]
+\Require Standards corpus $\mathcal{S}$; schema $\Sigma$ with
+  controlled vocabularies $V$; LLM $\mathcal{L}$; expert reviewer
+  $\mathcal{R}$.
+\Ensure Validated FMEA-chain set $\mathcal{F}$ and audit log $A$.
+\State Partition $\mathcal{S}$ into thematic batches
+  $B_1,\dots,B_n$.
+\For{each batch $B_k$}
+  \State $r_k \leftarrow \mathcal{L}\bigl(\text{prompt}(B_k,
+    \Sigma,V)\bigr)$
+    \Comment{schema-constrained generation}
+  \For{each candidate record $r \in r_k$}
+    \State Apply the four acceptance criteria (semantic
+      consistency, engineering plausibility, threshold fidelity,
+      intervention coherence).
+    \State Add $r$, $\mathcal{R}(r)$, or rejection rationale to
+      $\mathcal{F}$ and $A$ respectively.
+  \EndFor
+  \State Extend $V$ with any new controlled-vocabulary terms.
+\EndFor
+\State \Return $(\mathcal{F}, A)$
+\end{algorithmic}
+\end{algorithm}
+
+\section{LLM Extraction Pipeline}
+\label{app:precision}
+
+\begin{table}[htbp]
+\centering
+\caption{Per-field precision of the LLM extraction pipeline
+  ($n=42$ records over six FMEA chains, Claude Opus~4.7,
+  April-May 2026 runs).}
+\label{tab:precision}
+\begin{tabularx}{\textwidth}{p{3.4cm} p{1.4cm} p{1.4cm} p{1.6cm} X}
+\toprule
+\textbf{FMEA level (field)} & \textbf{Records} & \textbf{Accepted} &
+  \textbf{Precision} & \textbf{Failure modes observed} \\
+\midrule
+L1 Component       & 42 & 42 & $100\%$ & none \\
+L2 Mechanism       & 42 & 42 & $100\%$ & none \\
+L3 Defect/condition & 42 & 41 & $97.6\%$ & 1 minor severity-code
+  mis-tagging \\
+L4 Indicator       & 42 & 42 & $100\%$ & none \\
+L5 Cause           & 42 & 42 & $100\%$ & none \\
+L6 Threshold       & 21 & 18 & $85.7\%$ & 2 transcription errors;
+  1 hallucinated value \\
+L7 Intervention    & 42 & 42 & $100\%$ & none \\
+\midrule
+\textbf{Aggregate} & 42 & 39 & \textbf{92.9\%} &
+  Wilson 95\% CI [80.5\%, 97.6\%] \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Formal model of the multimodal integration layer}
+\label{app:formal}
+
+This appendix gives the formal model summarised in
+Section~\ref{sec:integration}, retained here for completeness and for
+readers interested in the underlying machinery. 
+
+\begin{definition}[Modality profile]
+\label{def:profile}
+For each sensing modality $m \in \mathcal{M}$, the
+\emph{modality profile} is the four-tuple
+\begin{equation}
+  P_m = \big( D_m,\ E_m,\ L_m,\ \overline{D_m} \big),
+  \label{eq:profile}
+\end{equation}
+where $D_m$ is the set of physical phenomena detectable by $m$;
+$E_m \subseteq \mathcal{E}_{\text{ont}}$ is the set of ontology
+entities populated by outputs of $m$; $L_m \subseteq \{1,\dots,7\}$
+is the set of FMEA chain levels at which $m$ enters; and
+$\overline{D_m}$ is the set of phenomena $m$ cannot detect.
+\end{definition}
+
+\begin{property}[Chain coverage]
+\label{prop:complement_v3}
+For the four profiles defined for $\mathcal{M}=\{\text{RGB, RGBD, Thermal, GPR}\}$, the union of directly populated levels is $\bigcup_{m \in \mathcal{M}} L_m =
+\{3,4,5\}$ and the intersection is $\bigcap_{m \in \mathcal{M}} L_m
+= \emptyset$. Levels $\{1,2,6,7\}$ are populated by ontology
+inference. Define the deductive closure $\mathrm{Cl}_\mathcal{O}(E)$
+as the set of ontology entities entailed from a populated set
+$E \subseteq \mathcal{E}_{\text{ont}}$ by the OWL~2.0 axioms and
+threshold/conflict rules of $\mathcal{O}$. Then for any defect location $\ell$
+and observation set $E_\ell = \bigcup_{m \in \mathcal{M}_\ell}
+\Phi_m(o_m,\ell)$, the FMEA chain
+(Equation~\ref{eq:fmea_chain}) is fully populated in
+$\mathrm{Cl}_\mathcal{O}(E_\ell)$ if and only if the set of
+populated levels $L_{\mathcal{M}_\ell} = \bigcup_{m \in
+\mathcal{M}_\ell} L_m$ contains at least one defect-level
+observation, that is $L_{\mathcal{M}_\ell} \cap \{3\} \neq
+\emptyset$. In the reference demonstration these rules are evaluated by a Python rule evaluator that operates on the loaded RDF graph. The same rules are specified in SWRL form (Appendix~\ref{app:swrl}) for migration to an operational SWRL reasoner.
+\end{property}
+
+\paragraph{Sketch of justification.}
+Levels~1 (component) and~2 (mechanism) are determined from a
+level-3 defect by the ontology axioms
+\texttt{DefectCondition $\sqsubseteq$ \textsc{hasComponent}.Component}
+and \texttt{DefectCondition $\sqsubseteq$
+\textsc{hasMechanism}.FailureMechanism} respectively, both
+\texttt{owl:functionalProperty}. Levels~6 (threshold) and~7
+(intervention) are determined from levels~3 to~5 by SWRL rules of
+the form \texttt{DefectCondition($x$) $\wedge$ Indicator($x$,$v$)
+$\wedge$ $v \geq t$ $\to$ TriggersIntervention($x$,$i$)}. The
+biconditional follows: a level-3 observation is sufficient to
+populate $\{1,2,6,7\}$ deterministically, and necessary because
+levels~4 and~5 without level~3 leave the defect class itself
+undetermined and hence the prescriptive chain
+non-traversable.~$\square$ In the reference implementation these rules are realised by a Python evaluator with equivalent semantics; the SWRL form is the deployment-target specification (Section~\ref{sec:industry}).
+
+\begin{definition}[Multimodally-integrated condition assessment]
+\label{def:integrated}
+Given a defect location $\ell$ and a set of modalities
+$\mathcal{M}_{\ell} \subseteq \mathcal{M}$ deployed at $\ell$, the
+\emph{multimodally-integrated condition assessment} $\mathcal{A}_{\ell}$ is
+constructed as
+\begin{align}
+  \mathcal{A}_{\ell} \ =\ \mathrm{Reason}\!\left(
+    \mathcal{R}\!\left(\bigcup_{m \in \mathcal{M}_{\ell}}
+    \Phi_m(o_m,\ell)
+    \right), \mathcal{O}\right),
+  \label{eq:integrated}
+\end{align}
+where $\Phi_m : \mathcal{O}_m \times \mathcal{L} \to
+2^{\mathcal{E}_{\text{ont}}}$ maps a modality observation $o_m$
+at location $\ell$ to a set of populated ontology entities;
+$\mathcal{R}(\cdot)$ is the contradiction-resolution operator of
+Section~\ref{sec:integration}; and
+$\mathrm{Reason}(\cdot,\mathcal{O})$ executes FMEA chain traversal
+over the ontology $\mathcal{O}$ via SPARQL/SWRL inference to
+produce a prescription with traceable provenance.
+\end{definition}
+
+\section{SWRL encoding of the extent-disagreement resolution rule}
+\label{app:swrl}
+
+This appendix gives the SWRL encoding of the extent-disagreement resolution rule in
+Section~\ref{sec:integration} as Listing~\ref{lst:swrl}.
+
+\begin{lstlisting}[caption={SWRL encoding of the extent-disagreement
+  resolution rule.},label=lst:swrl,float=htbp]
+# Two modalities report different extents for the same defect:
+# retain both, and use the larger as operative repair scope.
+DefectCondition(?x) ^
+hasIndicator(?x, ?i_v) ^ Modality(?i_v, RGBD) ^
+hasIndicator(?x, ?i_t) ^ Modality(?i_t, Thermal) ^
+hasArea(?i_v, ?a_v) ^ hasArea(?i_t, ?a_t) ^
+swrlb:greaterThan(?a_t, ?a_v)
+  -> hasVisibleExtent(?x, ?a_v) ^
+     hasSubsurfaceExtent(?x, ?a_t) ^
+     hasOperativeRepairScope(?x, ?a_t)
+\end{lstlisting}
+
+\section{Competency questions derived from maintenance scenarios}
+\label{app:cq}
+
+The ontology was validated against 31 competency questions (CQs) derived
+from five maintenance scenarios drawn from the project case's operational
+practice. 
+
+% -----------------------------------------------------------------------------
+% Scenario 1
+% -----------------------------------------------------------------------------
+\begin{table}[htbp]
+\centering
+\caption{Scenario~1 --- Crack with moisture detected during quarterly
+  inspection.}
+\label{tab:cq-scenario1}
+\begin{tabularx}{\linewidth}{@{}l X l@{}}
+\toprule
+\textbf{ID} & \textbf{Question} & \textbf{Category} \\
+\midrule
+CQ-01 & What type of defect has been identified at this location? & Defect \\
+CQ-02 & What are the measured dimensions of this defect? & Defect \\
+CQ-03 & Which FMEA chain levels have sensor evidence for this defect? &
+  Multimodal \\
+CQ-04 & What is the diagnostic completeness score? & Multimodal \\
+CQ-05 & Which additional modalities should be deployed to fill evidence
+  gaps? & Multimodal \\
+CQ-06 & What condition state does this defect correspond to? & Defect \\
+CQ-07 & What intervention is prescribed for this condition state? &
+  Maintenance \\
+CQ-08 & What is the deadline for this intervention? & Maintenance \\
+CQ-09 & Is the cause of the crack known, or is it inferred? &
+  Multimodal \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+
+% -----------------------------------------------------------------------------
+% Scenario 2
+% -----------------------------------------------------------------------------
+\begin{table}[htbp]
+\centering
+\caption{Scenario~2: Thermal anomaly triggers investigation of hidden
+  moisture path.}
+\label{tab:cq-scenario2}
+\begin{tabularx}{\linewidth}{@{}l X l@{}}
+\toprule
+\textbf{ID} & \textbf{Question} & \textbf{Category} \\
+\midrule
+CQ-10 & Is there a previously documented defect at this location? &
+  Defect \\
+CQ-11 & Does the thermal observation provide cause-level evidence for
+  the existing defect? & Multimodal \\
+CQ-12 & What potential cause does the thermal anomaly indicate? &
+  Defect \\
+CQ-13 & Does the GPR observation provide structure-level evidence? &
+  Multimodal \\
+CQ-14 & Has the diagnostic completeness score changed after adding
+  thermal and GPR? & Multimodal \\
+CQ-15 & Does the new evidence change the prescribed intervention or its
+  urgency? & Maintenance \\
+CQ-16 & Is the rebar cover below the minimum specified in referred Standards for
+  this exposure class? & Compliance \\
+CQ-17 & Does the void require a separate intervention (e.g.\ grout
+  injection)? & Maintenance \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+
+% -----------------------------------------------------------------------------
+% Scenario 3
+% -----------------------------------------------------------------------------
+\begin{table}[htbp]
+\centering
+\caption{Scenario~3: Prioritisation across multiple defects in a
+  tunnel section.}
+\label{tab:cq-scenario3}
+\begin{tabularx}{\linewidth}{@{}l X l@{}}
+\toprule
+\textbf{ID} & \textbf{Question} & \textbf{Category} \\
+\midrule
+CQ-18 & What are all active defects in a given tunnel section? &
+  Asset \\
+CQ-19 & What is the condition state and diagnostic completeness for
+  each? & Defect \\
+CQ-20 & Which defects exceed the serviceability threshold? &
+  Compliance \\
+CQ-21 & What is the estimated cost of each prescribed intervention? &
+  Maintenance \\
+CQ-22 & Which defects have multiple failure modes co-occurring at the
+  same asset? & Defect \\
+CQ-23 & Rank defects by priority considering condition state,
+  completeness, and co-occurrence. & Maintenance \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+
+% -----------------------------------------------------------------------------
+% Scenario 4
+% -----------------------------------------------------------------------------
+\begin{table}[htbp]
+\centering
+\caption{Scenario~4: Compliance audit and traceability.}
+\label{tab:cq-scenario4}
+\begin{tabularx}{\linewidth}{@{}l X l@{}}
+\toprule
+\textbf{ID} & \textbf{Question} & \textbf{Category} \\
+\midrule
+CQ-24 & What sensor data was used to identify this defect? &
+  Multimodal \\
+CQ-25 & Which standard clause defines the severity threshold applied? &
+  Compliance \\
+CQ-26 & Which standard clause prescribes the selected intervention? &
+  Compliance \\
+CQ-27 & What was the diagnostic completeness at the time of decision? &
+  Multimodal \\
+CQ-28 & Were there FMEA chain levels with no evidence? If so, was a
+  targeted survey recommended? & Multimodal \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+
+% -----------------------------------------------------------------------------
+% Scenario 5
+% -----------------------------------------------------------------------------
+\begin{table}[htbp]
+\centering
+\caption{Scenario~5: Modality limitation awareness.}
+\label{tab:cq-scenario5}
+\begin{tabularx}{\linewidth}{@{}l X l@{}}
+\toprule
+\textbf{ID} & \textbf{Question} & \textbf{Category} \\
+\midrule
+CQ-29 & Which modalities can detect delamination? & Multimodal \\
+CQ-30 & Which modalities cannot detect delamination, and why? &
+  Multimodal \\
+CQ-31 & For a given defect type, what is the minimum set of modalities
+  needed for a completeness score $\geq 3/4$? & Multimodal \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% =====================================================================
+% Supplementary material:
+%   - Complete deterioration type taxonomy (53 entries, 5 mechanisms)
+%   - Full FMEA chains in seven-level tabular form (six chains)
+%   - Complete list of 31 competency questions with SPARQL realisations
+%   - Sensor-data archives for the worked examples
+% Available at the journal's supplementary repository upon publication.
+
+\end{document}

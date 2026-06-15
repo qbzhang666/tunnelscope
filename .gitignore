@@ -48,7 +48,9 @@ logs/
 
 # Large reference library — standards & datasets (~5 GB), not code.
 # The app links to it via utils/library.py at runtime; it is not versioned.
-2026 Ontology Paper/
+# Exception: the manuscript LaTeX source is tracked; the bulky data is not.
+2026 Ontology Paper/*
+!2026 Ontology Paper/_Submission.tex
 
 # Runtime-generated user data (tunnels created on the Tunnel Setup page)
 data/custom_tunnels.json
