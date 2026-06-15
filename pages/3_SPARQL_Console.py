@@ -423,7 +423,7 @@ with st.expander("SPARQL quick reference"):
 
     **Useful properties:**
     - `tun:hasDefect`, `tun:hasMechanism`, `tun:hasIndicator`
-    - `tun:hasCause`, `tun:hasIntervention`
+    - `tun:hasPotentialCause`, `tun:hasIntervention`
     - `tun:atRingID`, `tun:atChainage`, `tun:atComponent`
     - `tun:detectedBy`, `tun:sourceReference`
     - `tun:completenessScore`, `tun:estimatedCost`
