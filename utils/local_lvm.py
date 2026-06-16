@@ -40,12 +40,15 @@ from __future__ import annotations
 import base64
 import io
 import json
+import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
-DEFAULT_ENDPOINT = "http://localhost:11434"
+# Endpoint honours the OLLAMA_ENDPOINT env var so a containerised deploy can
+# point at an Ollama sidecar (e.g. http://ollama:11434); falls back to local.
+DEFAULT_ENDPOINT = os.getenv("OLLAMA_ENDPOINT", "http://localhost:11434")
 DEFAULT_MODEL = "qwen2.5vl:7b"
 # Text model used for auto-extracting fields from inspection REPORTS.
 # Any locally-installed instruct model works; this is a sensible default.

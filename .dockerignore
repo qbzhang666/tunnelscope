@@ -1,0 +1,32 @@
+# Keep the build context small and clean. Critically excludes the ~5 GB
+# "2026 Ontology Paper" datasets so the context stays a few MB.
+
+.git
+.gitignore
+.gitattributes
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.idea/
+.vscode/
+.DS_Store
+
+# Big datasets — optional at runtime; mount read-only instead of baking in.
+2026 Ontology Paper/
+
+# Local Streamlit credentials (not needed in the image).
+.streamlit/credentials.toml
+
+# Runtime-written state (don't bake a user's local tunnels into the image).
+data/custom_tunnels.json
+
+# The FastAPI backend is a separate service, not part of this image.
+backend/
+
+# Generated artifacts / scratch.
+*.pdf
+*.aux
+*.log

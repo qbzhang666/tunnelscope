@@ -1,0 +1,35 @@
+# Portable run for the Tunnel-DT app.
+#   docker compose up --build
+# then open http://localhost:8501
+
+services:
+  app:
+    build: .
+    image: tunnel-dt:latest
+    ports:
+      - "8501:8501"
+    environment:
+      STREAMLIT_SERVER_HEADLESS: "true"
+      # Use the optional Ollama sidecar (below) for the local-VLM ingest
+      # routes — otherwise use the Cloud VLM route or manual entry:
+      # OLLAMA_ENDPOINT: "http://ollama:11434"
+    # volumes:
+    #   # Populate the Standards Library + report References by mounting the
+    #   # datasets read-only (the app runs fine without this):
+    #   - "/abs/path/to/2026 Ontology Paper:/app/2026 Ontology Paper:ro"
+    #   # Persist user-created tunnels across restarts (create the file first):
+    #   - "./persist/custom_tunnels.json:/app/data/custom_tunnels.json"
+    restart: unless-stopped
+
+  # Optional local VLM. Uncomment this service + the OLLAMA_ENDPOINT above,
+  # bring it up, then pull a model once:
+  #   docker compose exec ollama ollama pull qwen2.5vl:7b
+  # (CPU by default; add an NVIDIA device reservation for GPU.)
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   volumes:
+  #     - ollama-models:/root/.ollama
+  #   restart: unless-stopped
+
+# volumes:
+#   ollama-models:
