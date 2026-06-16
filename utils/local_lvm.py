@@ -50,7 +50,13 @@ DEFAULT_MODEL = "qwen2.5vl:7b"
 # Text model used for auto-extracting fields from inspection REPORTS.
 # Any locally-installed instruct model works; this is a sensible default.
 DEFAULT_TEXT_CLASSIFY_MODEL = "qwen3:8b"
-DEFAULT_TIMEOUT_S = 120  # generous — local models can be slow on CPU
+DEFAULT_TIMEOUT_S = 300  # first call cold-starts the model; be generous
+# Keep the model resident between calls so only the FIRST classification in a
+# session pays the multi-GB load cost; later photos/reports are much faster.
+DEFAULT_KEEP_ALIVE = "30m"
+# Cap generated tokens: the reply is a small JSON object (or a short raw
+# description), so this bounds runaway generation without truncating output.
+DEFAULT_NUM_PREDICT = 768
 
 
 # -----------------------------------------------------------------------------
@@ -132,6 +138,8 @@ def run_image_inference(
         "prompt": prompt,
         "images": [b64],
         "stream": False,
+        "keep_alive": DEFAULT_KEEP_ALIVE,
+        "options": {"num_predict": DEFAULT_NUM_PREDICT},
     }
     try:
         resp = requests.post(
@@ -144,8 +152,12 @@ def run_image_inference(
                          f"is the server running? ({exc})"}
     except requests.exceptions.Timeout:
         return {"ok": False, "text": "", "raw": None,
-                "error": f"Ollama timed out after {timeout}s. "
-                         f"Try a smaller model or a shorter prompt."}
+                "error": f"Ollama timed out after {timeout:.0f}s. The first "
+                         f"run loads the model into memory and is the "
+                         f"slowest — click again to retry on the now-warm "
+                         f"model, raise the timeout in the config panel, or "
+                         f"pull a smaller vision model (e.g. qwen2.5vl:3b, "
+                         f"moondream)."}
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "text": "", "raw": None,
                 "error": f"Inference error: {exc}"}
@@ -191,6 +203,8 @@ def run_text_inference(
         "model": model,
         "prompt": prompt_template.format(text=text),
         "stream": False,
+        "keep_alive": DEFAULT_KEEP_ALIVE,
+        "options": {"num_predict": DEFAULT_NUM_PREDICT},
     }
     try:
         resp = requests.post(
@@ -465,7 +479,9 @@ def _ollama_generate(prompt: str, model: str, endpoint: str,
                      timeout: float) -> Dict[str, Any]:
     """Low-level /api/generate call that sends the prompt verbatim (no
     str.format), so prompts containing literal JSON braces are safe."""
-    payload = {"model": model, "prompt": prompt, "stream": False}
+    payload = {"model": model, "prompt": prompt, "stream": False,
+               "keep_alive": DEFAULT_KEEP_ALIVE,
+               "options": {"num_predict": DEFAULT_NUM_PREDICT}}
     try:
         resp = requests.post(f"{endpoint}/api/generate",
                              json=payload, timeout=timeout)

@@ -150,7 +150,7 @@ if USE_LOCAL_MODEL:
     from utils.local_lvm import (
         check_ollama_health, list_local_models, list_vision_models,
         DEFAULT_ENDPOINT, DEFAULT_MODEL, DEFAULT_TEXT_CLASSIFY_MODEL,
-        DEFAULT_IMAGE_PROMPT, DEFAULT_TEXT_PROMPT,
+        DEFAULT_IMAGE_PROMPT, DEFAULT_TEXT_PROMPT, DEFAULT_TIMEOUT_S,
     )
 
     if USE_AI_CLASSIFY:
@@ -210,6 +210,16 @@ if USE_LOCAL_MODEL:
                     value=DEFAULT_MODEL,
                 )
             st.session_state.ollama_model = ollama_model
+
+        st.session_state.ollama_timeout = st.number_input(
+            "Inference timeout (seconds)",
+            min_value=60, max_value=900, step=30,
+            value=int(st.session_state.get("ollama_timeout",
+                                           DEFAULT_TIMEOUT_S)),
+            help="The first photo/report loads the model into memory and is "
+                 "the slowest; later runs reuse it and are much faster. "
+                 "Raise this if a big model or CPU-only machine times out.",
+        )
 
         if health_ok:
             st.success(f"✓ {health_msg}")
@@ -422,12 +432,15 @@ if input_route.startswith("Image"):
                     from utils.local_lvm import classify_defect_image
                     with st.spinner(
                         f"Running {st.session_state.ollama_model} on your "
-                        f"machine — a photo can take 30–120 s on CPU…"
+                        f"machine — the first photo loads the model and can "
+                        f"take a few minutes; later photos are much faster…"
                     ):
                         res = classify_defect_image(
                             image_bytes=uploaded.getvalue(),
                             model=st.session_state.ollama_model,
                             endpoint=st.session_state.ollama_endpoint,
+                            timeout=st.session_state.get("ollama_timeout",
+                                                         DEFAULT_TIMEOUT_S),
                         )
                     res["_file"] = uploaded.name
                     st.session_state.ai_image_result = res
@@ -543,15 +556,17 @@ if input_route.startswith("Image"):
                              key="run_lvm_image"):
                     from utils.local_lvm import run_image_inference
                     with st.spinner(
-                        f"Running {st.session_state.ollama_model} "
-                        f"on local machine — this may take 30–120 s "
-                        f"depending on model size and CPU/GPU…"
+                        f"Running {st.session_state.ollama_model} on local "
+                        f"machine — the first run loads the model and can "
+                        f"take a few minutes; later runs are much faster…"
                     ):
                         result = run_image_inference(
                             image_bytes=uploaded.getvalue(),
                             prompt=custom_prompt,
                             model=st.session_state.ollama_model,
                             endpoint=st.session_state.ollama_endpoint,
+                            timeout=st.session_state.get("ollama_timeout",
+                                                         DEFAULT_TIMEOUT_S),
                         )
                     st.session_state.lvm_image_result = result
 
@@ -763,12 +778,15 @@ else:
                     from utils.local_lvm import classify_defect_text
                     with st.spinner(
                         f"Running {st.session_state.ollama_model} on your "
-                        f"machine…"
+                        f"machine — the first run loads the model; later "
+                        f"runs are much faster…"
                     ):
                         res = classify_defect_text(
                             text=extracted_text,
                             model=st.session_state.ollama_model,
                             endpoint=st.session_state.ollama_endpoint,
+                            timeout=st.session_state.get("ollama_timeout",
+                                                         DEFAULT_TIMEOUT_S),
                         )
                     res["_file"] = uploaded.name
                     st.session_state.ai_text_result = res
@@ -872,14 +890,17 @@ else:
                              key="run_lvm_text"):
                     from utils.local_lvm import run_text_inference
                     with st.spinner(
-                        f"Running {st.session_state.ollama_model} "
-                        f"on local machine…"
+                        f"Running {st.session_state.ollama_model} on local "
+                        f"machine — the first run loads the model; later "
+                        f"runs are much faster…"
                     ):
                         result = run_text_inference(
                             text=extracted_text,
                             prompt_template=custom_text_prompt,
                             model=st.session_state.ollama_model,
                             endpoint=st.session_state.ollama_endpoint,
+                            timeout=st.session_state.get("ollama_timeout",
+                                                         DEFAULT_TIMEOUT_S),
                         )
                     st.session_state.lvm_text_result = result
 
