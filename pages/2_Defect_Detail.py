@@ -847,7 +847,12 @@ with col1:
         )
 with col2:
     if st.button("Export COBie rows"):
-        st.info("Exporting COBie rows for this defect...")
+        from utils.cv_to_cobie import defects_to_cobie_rows
+        st.session_state.cobie_export = {
+            "defect_id": defect["defect_id"],
+            "rows": defects_to_cobie_rows(
+                [defect], defect.get("tunnel_id", "TUN-A")),
+        }
 with col3:
     if st.button("Request additional survey"):
         if recommendations:
@@ -855,3 +860,34 @@ with col3:
             st.info(f"Survey request queued: deploy **{top['modality']}**.")
         else:
             st.info("No further surveys recommended.")
+
+# COBie export result — rendered full-width and persisted across the
+# download-button reruns via session_state, scoped to the current defect.
+cobie_export = st.session_state.get("cobie_export")
+if cobie_export and cobie_export["defect_id"] == defect.get("defect_id"):
+    import pandas as pd
+
+    rows = cobie_export["rows"]
+    st.markdown(f"**COBie rows — {defect['defect_id']}** ({len(rows)} row(s))")
+    df = pd.DataFrame(rows)
+    st.dataframe(df, hide_index=True, width="stretch")
+    dcol1, dcol2 = st.columns(2)
+    with dcol1:
+        st.download_button(
+            "Download COBie CSV",
+            df.to_csv(index=False).encode("utf-8"),
+            file_name=f"cobie_{defect['defect_id']}.csv",
+            mime="text/csv",
+        )
+    with dcol2:
+        st.download_button(
+            "Download COBie JSON",
+            json.dumps(rows, indent=2, default=str).encode("utf-8"),
+            file_name=f"cobie_{defect['defect_id']}.json",
+            mime="application/json",
+        )
+    st.caption(
+        "`COBie.Defect` + `COBie.RealTimeData` rows for this defect — the "
+        "same schema as the CV → COBie bridge. Measurement rows appear when "
+        "the defect has a crack width / spall depth / area recorded."
+    )
