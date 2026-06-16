@@ -231,11 +231,134 @@ def _defect_case_file(d: Dict[str, Any]) -> str:
     return "\n".join(parts)
 
 
+def _shorten(term: Any) -> str:
+    """Trim a URI/literal to a readable label (local name after # or /)."""
+    s = str(term)
+    if "#" in s:
+        return s.rsplit("#", 1)[-1]
+    if s.startswith("http") and "/" in s:
+        return s.rsplit("/", 1)[-1]
+    return s
+
+
+def _latex_table(cols: List[str], rows: List[List[str]],
+                 longtable: bool = False) -> str:
+    if not rows:
+        return "\\emph{No rows returned.}"
+    spec = "l" * len(cols)
+    env = "longtable" if longtable else "tabular"
+    head = " & ".join(_esc(c) for c in cols) + " \\\\"
+    body = "\n".join(" & ".join(_esc(x) for x in r) + " \\\\" for r in rows)
+    return (f"\\begin{{{env}}}{{@{{}}{spec}@{{}}}}\\toprule\n"
+            f"{head} \\midrule\n{body}\n\\bottomrule\n\\end{{{env}}}")
+
+
+def _run_select(graph: Any, qstr: str, max_rows: int = 12):
+    """Run a SPARQL SELECT; return (columns, shown_rows, total_rows)."""
+    res = graph.query(qstr)
+    cols = [str(v) for v in res.vars]
+    allrows = list(res)
+    shown = [[_shorten(t) if t is not None else "" for t in r]
+             for r in allrows[:max_rows]]
+    return cols, shown, len(allrows)
+
+
+def _kb_verification_section(graph: Any) -> str:
+    """Section: live SPARQL competency questions against the populated graph."""
+    from utils.sparql_queries import (
+        query_high_priority_defects, query_modality_coverage_stats,
+        query_interventions_per_standard,
+    )
+    intro = (
+        "These queries run live against the populated maintenance ontology "
+        "(the demonstration knowledge graph), using the same canned "
+        "competency questions as the SPARQL console --- so the figures in "
+        "this report are reproducible from the knowledge base, not "
+        "hand-entered.\n\n\\medskip\n"
+    )
+    items = [
+        ("Q1. Which defects are ranked HIGH priority, with ring, chainage "
+         "and modelled cost?", query_high_priority_defects()),
+        ("Q2. How many defects does each sensing modality have evidence "
+         "for?", query_modality_coverage_stats()),
+        ("Q3. How many interventions trace to each cited standard?",
+         query_interventions_per_standard()),
+    ]
+    blocks = []
+    for q_text, qstr in items:
+        try:
+            cols, rows, total = _run_select(graph, qstr)
+            tbl = _latex_table(cols, rows)
+            more = (f"\n\n{{\\small Showing {len(rows)} of {total} rows.}}"
+                    if total > len(rows) else "")
+        except Exception as exc:  # noqa: BLE001
+            tbl = f"\\emph{{Query could not run: {_esc(type(exc).__name__)}.}}"
+            more = ""
+        blocks.append(f"\\textbf{{{_esc(q_text)}}}\n\n{tbl}{more}")
+    return intro + "\n\n\\medskip\n".join(blocks)
+
+
+def _cobie_section(defects: List[Dict[str, Any]], tunnel_id: str) -> str:
+    """Section: this tunnel's defects as COBie handover rows."""
+    from utils.cv_to_cobie import defects_to_cobie_rows
+    rows = defects_to_cobie_rows(defects, tunnel_id)
+    drows = [r for r in rows if r["sheet"] == "COBie.Defect"]
+    rtd = [r for r in rows if r["sheet"] == "COBie.RealTimeData"]
+    if not drows:
+        return ("\\emph{No defects registered against this tunnel, so there "
+                "are no COBie rows to hand over.}")
+    body = "".join(
+        f"{_esc(r['Name'])} & {_esc(r['DefectTypeName'])} & "
+        f"{_esc(r['ComponentName'])} & {_esc(r['Degree'])} & "
+        f"{_esc(r['Description'])} \\\\\n" for r in drows)
+    table = (
+        "Defects as COBie handover rows (the format a facility-management "
+        "system ingests):\n\n\\medskip\n"
+        "\\begin{longtable}{@{}lllll@{}}\\toprule\n"
+        "Name & Defect type & Component & Degree & Description \\\\ \\midrule\n"
+        f"{body}\\bottomrule\n\\end{{longtable}}")
+    note = (
+        f"\n\n{len(drows)} \\texttt{{COBie.Defect}} rows plus {len(rtd)} "
+        f"\\texttt{{COBie.RealTimeData}} measurement rows. The full COBie "
+        f"CSV/JSON is exportable on the CV \\(\\rightarrow\\) COBie page.")
+    return table + note
+
+
+def _knowledge_model_section(graph: Any,
+                             defects: List[Dict[str, Any]]) -> str:
+    """Section: structural summary of the ontology behind the prescriptions."""
+    from rdflib import RDF, RDFS, OWL
+    classes = (set(graph.subjects(RDF.type, OWL.Class))
+               | set(graph.subjects(RDF.type, RDFS.Class)))
+    n_obj = len(set(graph.subjects(RDF.type, OWL.ObjectProperty)))
+    n_data = len(set(graph.subjects(RDF.type, OWL.DatatypeProperty)))
+    tbl = _latex_table(
+        ["Triples", "Classes", "Object properties", "Datatype properties"],
+        [[f"{len(graph):,}", str(len(classes)), str(n_obj), str(n_data)]])
+    types = sorted({d.get("defect_type") for d in defects
+                    if d.get("defect_type")})
+    types_line = (", ".join(_esc(t) for t in types) if types
+                  else "none registered yet")
+    narrative = (
+        "\n\n\\medskip\nThe maintenance ontology backs every prescription. "
+        "The 7-level FMEA chain is realised by the object properties "
+        "\\texttt{atComponent}, \\texttt{hasMechanism}, "
+        "\\texttt{hasIndicator}, \\texttt{hasPotentialCause} and "
+        "\\texttt{hasIntervention} (the level-6 threshold is applied at "
+        "reasoning time by the evaluator). Defect types in this report: "
+        f"{types_line}.")
+    return tbl + narrative
+
+
 def build_report_tex(tunnel: Dict[str, Any],
                      bim_tunnel: Optional[Dict[str, Any]],
                      defects: List[Dict[str, Any]],
                      bim_png_name: str,
-                     include_case_files: bool = True) -> str:
+                     include_case_files: bool = True,
+                     graph: Any = None,
+                     include_sparql: bool = False,
+                     include_cobie: bool = False,
+                     include_ontology: bool = False) -> str:
     """Assemble the complete LaTeX source for the session report."""
     k = _kpis(defects)
     today = datetime.now().strftime("%d %B %Y")
@@ -322,6 +445,27 @@ def build_report_tex(tunnel: Dict[str, Any],
     else:
         case_files = "\n".join(_defect_case_file(d) for d in sorted_defects)
 
+    # Optional Specialist-tool sections (knowledge-base verification, COBie
+    # handover, knowledge-model summary). Numbered dynamically so disabling
+    # one leaves no gap; References is renumbered after them.
+    opt_sections: List[Tuple[str, str]] = []
+    if include_sparql and graph is not None:
+        opt_sections.append((
+            "Knowledge-base verification (SPARQL competency questions)",
+            _kb_verification_section(graph)))
+    if include_cobie:
+        opt_sections.append((
+            "COBie data handover",
+            _cobie_section(defects, tunnel.get("tunnel_id", "TUN-A"))))
+    if include_ontology and graph is not None:
+        opt_sections.append((
+            "Knowledge-model summary",
+            _knowledge_model_section(graph, defects)))
+    opt_tex = "".join(
+        f"\\section*{{{7 + i}. {title}}}\n{body}\n\n"
+        for i, (title, body) in enumerate(opt_sections))
+    refs_no = 7 + len(opt_sections)
+
     return f"""\\documentclass[10pt,a4paper]{{article}}
 \\usepackage[margin=2.2cm]{{geometry}}
 \\usepackage{{booktabs,longtable,graphicx,amsmath,amssymb,xcolor}}
@@ -387,7 +531,7 @@ indicative defaults to be calibrated against the maintenance contract.
 \\section*{{6. Survey coverage by tunnel section}}
 {coverage_block}
 
-\\section*{{7. References and data}}
+{opt_tex}\\section*{{{refs_no}. References and data}}
 Standards and datasets bundled with the project
 (folder \\texttt{{2026 Ontology Paper}}):
 \\begin{{itemize}}\\itemsep2pt
@@ -477,13 +621,159 @@ def compile_latex_to_pdf(tex_source: str,
 def generate_report(tunnel: Dict[str, Any],
                     bim_tunnel: Optional[Dict[str, Any]],
                     defects: List[Dict[str, Any]],
-                    include_case_files: bool = True) -> Dict[str, Any]:
+                    include_case_files: bool = True,
+                    graph: Any = None,
+                    include_sparql: bool = False,
+                    include_cobie: bool = False,
+                    include_ontology: bool = False) -> Dict[str, Any]:
     """Build tex + BIM figure, compile, and bundle a ZIP fallback."""
     png = render_bim_png(tunnel, bim_tunnel, defects)
     png_name = "bim_model.png"
     tex = build_report_tex(tunnel, bim_tunnel, defects, png_name,
-                           include_case_files=include_case_files)
+                           include_case_files=include_case_files,
+                           graph=graph, include_sparql=include_sparql,
+                           include_cobie=include_cobie,
+                           include_ontology=include_ontology)
     jobname = f"{tunnel.get('tunnel_id', 'tunnel')}_report".replace("-", "_")
+    pdf, message = compile_latex_to_pdf(tex, [(png_name, png)], jobname)
+
+    zbuf = io.BytesIO()
+    with zipfile.ZipFile(zbuf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr(f"{jobname}.tex", tex)
+        z.writestr(png_name, png)
+    return {
+        "tex": tex,
+        "png": png,
+        "pdf": pdf,
+        "message": message,
+        "zip": zbuf.getvalue(),
+        "jobname": jobname,
+    }
+
+
+# -----------------------------------------------------------------------------
+# Presentation (Beamer slide deck) — reuses the BIM figure + LaTeX engine
+# -----------------------------------------------------------------------------
+def build_presentation_tex(tunnel: Dict[str, Any],
+                           bim_tunnel: Optional[Dict[str, Any]],
+                           defects: List[Dict[str, Any]],
+                           bim_png_name: str) -> str:
+    """Assemble a concise, board-ready Beamer deck from the same session
+    data as the report (reusing the BIM image). Compiles with the same
+    engine; no new dependencies."""
+    k = _kpis(defects)
+    today = datetime.now().strftime("%d %B %Y")
+    label = _esc(tunnel.get("label", "Tunnel"))
+
+    n_high = sum(1 for d in defects if d.get("priority") == "HIGH")
+    n_med = sum(1 for d in defects if d.get("priority") == "MEDIUM")
+    n_low = sum(1 for d in defects if d.get("priority") == "LOW")
+
+    sorted_defects = sorted(
+        defects,
+        key=lambda x: {"HIGH": 0, "MEDIUM": 1}.get(x.get("priority"), 2))
+    top = sorted_defects[:6]
+    if top:
+        rows = "".join(
+            f"{_esc(d.get('defect_id'))} & {_esc(d.get('defect_type'))} & "
+            f"{_esc(d.get('ring_id'))} & {_esc(d.get('priority', '---'))} & "
+            f"\\${effective_cost(d)[0]:,.0f} \\\\\n" for d in top)
+        register = (
+            "\\begin{tabular}{@{}lllll@{}}\\toprule\n"
+            "ID & Type & Ring & Priority & Est.\\ cost \\\\ \\midrule\n"
+            f"{rows}\\bottomrule\n\\end{{tabular}}")
+        more = (f"\n\n{{\\footnotesize Showing top {len(top)} of "
+                f"{len(defects)} defects --- full register in the report.}}"
+                if len(defects) > len(top) else "")
+    else:
+        register = ("\\emph{No defects registered against this tunnel yet "
+                    "--- this is a setup summary.}")
+        more = ""
+
+    bim_facts = (
+        f"internal diameter {bim_tunnel.get('internal_diameter_m')} m, "
+        f"lining {bim_tunnel.get('lining_thickness_m')} m, "
+        f"{bim_tunnel.get('segments_per_ring')} segments/ring"
+        if bim_tunnel else
+        f"generic {DEFAULT_DIAMETER_M:g} m lining (no as-built record)"
+    )
+
+    return f"""\\documentclass[aspectratio=169,11pt]{{beamer}}
+\\usetheme{{Boadilla}}
+\\usecolortheme{{whale}}
+\\setbeamertemplate{{navigation symbols}}{{}}
+\\setbeamertemplate{{footline}}[frame number]
+\\usepackage{{booktabs}}
+
+\\title[Tunnel DT --- {label}]{{Tunnel Maintenance Digital Twin}}
+\\subtitle{{Inspection \\& Intervention Summary --- {label}}}
+\\author{{Tunnel DT Dashboard (automated)}}
+\\date{{{today}}}
+
+\\begin{{document}}
+\\frame{{\\titlepage}}
+
+\\begin{{frame}}{{Executive summary}}
+\\begin{{itemize}}
+  \\item \\textbf{{{k['active']}}} open defects; \\textbf{{{k['high']}}} need action within 30 days
+  \\item Diagnosis confidence \\textbf{{{k['confidence_pct']}\\%}}
+  \\item 12-month cost exposure \\textbf{{\\${k['total_cost']:,.0f}}}
+\\end{{itemize}}
+\\vfill
+{{\\footnotesize Priority mix: {n_high} HIGH / {n_med} MEDIUM / {n_low} LOW.}}
+\\end{{frame}}
+
+\\begin{{frame}}{{As-built BIM model --- {label}}}
+\\begin{{center}}
+\\includegraphics[width=\\linewidth,height=0.82\\textheight,keepaspectratio]{{{bim_png_name}}}
+\\end{{center}}
+\\end{{frame}}
+
+\\begin{{frame}}{{Defect register}}
+{register}{more}
+\\end{{frame}}
+
+\\begin{{frame}}{{Priority \\& cost basis}}
+\\begin{{itemize}}
+  \\item Priority by AASHTO/Austroads coding: active water or spalling at the reinforcement \\(\\rightarrow\\) HIGH (act \\(\\le\\) 30 days)
+  \\item Cost \\(=\\) quantity \\(\\times\\) rate \\(\\times\\) factors \\(+\\) allowances \\(+\\) mobilisation
+  \\item Contingency band widens as evidence completeness falls
+\\end{{itemize}}
+\\end{{frame}}
+
+\\begin{{frame}}{{How the figures are produced}}
+\\begin{{itemize}}
+  \\item Multimodal survey (RGB, depth, thermal, GPR)
+  \\item AI defect extraction \\(\\rightarrow\\) COBie asset records
+  \\item Ontology knowledge base \\(\\rightarrow\\) standards-based risk ranking
+  \\item Costed, prioritised work orders
+\\end{{itemize}}
+\\end{{frame}}
+
+\\begin{{frame}}{{Asset \\& standards}}
+\\begin{{itemize}}
+  \\item {label}: length {float(tunnel.get('length_m', 0)):,.0f} m, {int(tunnel.get('rings_total') or 0):,} rings
+  \\item BIM as-built: {bim_facts}
+  \\item Prescriptions cite AASHTO / Austroads / fib standards (full list in the PDF report)
+\\end{{itemize}}
+\\vfill
+{{\\footnotesize Demonstration data --- anonymised tunnels; synthetic but standards-consistent.}}
+\\end{{frame}}
+
+\\end{{document}}
+"""
+
+
+def generate_presentation(tunnel: Dict[str, Any],
+                          bim_tunnel: Optional[Dict[str, Any]],
+                          defects: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Build the Beamer deck, compile to PDF, and bundle a ZIP fallback.
+    Same return shape as generate_report."""
+    png = render_bim_png(tunnel, bim_tunnel, defects)
+    png_name = "bim_model.png"
+    tex = build_presentation_tex(tunnel, bim_tunnel, defects, png_name)
+    jobname = (f"{tunnel.get('tunnel_id', 'tunnel')}_presentation"
+               .replace("-", "_"))
     pdf, message = compile_latex_to_pdf(tex, [(png_name, png)], jobname)
 
     zbuf = io.BytesIO()

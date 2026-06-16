@@ -19,7 +19,7 @@ from utils.styling import apply_custom_css
 from utils.explainers import render_plain_guide
 from utils.gis import list_tunnels
 from utils.bim import get_tunnel_record
-from utils.report import generate_report
+from utils.report import generate_report, generate_presentation
 
 apply_custom_css()
 
@@ -27,7 +27,7 @@ if "graph" not in st.session_state:
     st.session_state.graph = load_ontology()
     st.session_state.defects = load_defects(st.session_state.graph)
 
-st.title("Report")
+st.title("Report & presentation")
 st.caption(
     "Generate a single PDF capturing everything in this session — "
     "inputs, outputs, the BIM model image, and every defect's case "
@@ -35,9 +35,9 @@ st.caption(
 )
 
 render_plain_guide(
-    "Pick the tunnel, press **Generate report**, download the PDF. "
-    "Defects registered via Ingest this session are included "
-    "automatically."
+    "Pick the tunnel, press **Generate report** for the full PDF — or "
+    "**Generate presentation** lower down for a slide deck. Defects "
+    "registered via Ingest this session are included automatically."
 )
 
 # -----------------------------------------------------------------------------
@@ -70,6 +70,32 @@ with col2:
              "report.",
     )
 
+with st.expander("Specialist sections (outputs from the expert tools)",
+                 expanded=False):
+    st.caption(
+        "Append the Specialist tools' outputs as extra report sections — "
+        "so the PDF shows the evidence, not just the headline numbers."
+    )
+    inc_sparql = st.checkbox(
+        "Knowledge-base verification (SPARQL competency questions)",
+        value=True,
+        help="Runs the canned SPARQL queries against the populated graph and "
+             "tabulates the answers, so the report's numbers are traceable "
+             "to the knowledge base.",
+    )
+    inc_cobie = st.checkbox(
+        "COBie data-handover rows",
+        value=True,
+        help="This tunnel's defects as COBie Component + measurement rows — "
+             "the facility-management handover format.",
+    )
+    inc_ontology = st.checkbox(
+        "Knowledge-model summary",
+        value=True,
+        help="Counts of classes, properties and the FMEA chain that back "
+             "the prescriptions.",
+    )
+
 tunnel = label_to_tunnel[picked_label]
 tunnel_id = tunnel["tunnel_id"]
 defects = [d for d in st.session_state.defects
@@ -97,6 +123,10 @@ if st.button("Generate report", type="primary"):
             bim_tunnel=get_tunnel_record(tunnel_id),
             defects=defects,
             include_case_files=include_cases,
+            graph=st.session_state.graph,
+            include_sparql=inc_sparql,
+            include_cobie=inc_cobie,
+            include_ontology=inc_ontology,
         )
 
 art = st.session_state.get("report_artifacts")
@@ -146,3 +176,62 @@ st.caption(
     "prescription — browse and download them on the 📚 **Standards "
     "Library** page (step 7)."
 )
+
+st.divider()
+st.subheader("Presentation (slide deck)")
+st.caption(
+    "A board-ready Beamer **PDF slide deck** of the same session — title, "
+    "executive summary, the BIM model image, the defect register and the "
+    "method — for presenting to clients and managers. Built with the same "
+    "LaTeX engine as the report, so no extra setup."
+)
+
+if st.button("Generate presentation", type="primary", key="gen_presentation"):
+    with st.spinner(
+        "Building the Beamer slide deck and compiling the PDF — the first "
+        "run may take a minute while MiKTeX fetches the beamer packages…"
+    ):
+        st.session_state.presentation_artifacts = generate_presentation(
+            tunnel=tunnel,
+            bim_tunnel=get_tunnel_record(tunnel_id),
+            defects=defects,
+        )
+
+pres = st.session_state.get("presentation_artifacts")
+if pres:
+    if pres["pdf"]:
+        st.success(
+            f"Slide deck compiled — {len(pres['pdf']) / 1e6:.1f} MB PDF."
+        )
+    else:
+        st.warning(
+            "PDF could not be compiled on this machine — download the "
+            "Beamer source / ZIP below and compile elsewhere.\n\n"
+            f"Details: {pres['message']}"
+        )
+    p1, p2, p3 = st.columns(3)
+    with p1:
+        if pres["pdf"]:
+            st.download_button(
+                "📊 Download slide deck (PDF)",
+                data=pres["pdf"],
+                file_name=f"{pres['jobname']}.pdf",
+                mime="application/pdf",
+                key="dl_pres_pdf",
+            )
+    with p2:
+        st.download_button(
+            "Download Beamer source (.tex)",
+            data=pres["tex"].encode("utf-8"),
+            file_name=f"{pres['jobname']}.tex",
+            mime="application/x-tex",
+            key="dl_pres_tex",
+        )
+    with p3:
+        st.download_button(
+            "Download ZIP (tex + figure)",
+            data=pres["zip"],
+            file_name=f"{pres['jobname']}_bundle.zip",
+            mime="application/zip",
+            key="dl_pres_zip",
+        )

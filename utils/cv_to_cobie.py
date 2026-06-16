@@ -261,6 +261,63 @@ def convert_cv_output_to_cobie_rows(
     return rows
 
 
+def defects_to_cobie_rows(
+    defects: List[Dict[str, Any]],
+    tunnel_id: str = "TUN-A",
+) -> List[Dict[str, Any]]:
+    """
+    Map registered defect records to COBie rows, using the same schema the
+    CV bridge emits (COBie.Defect + COBie.RealTimeData) — so a report or
+    handover can carry COBie-formatted data straight from the register,
+    without going through the CV pipeline.
+    """
+    rows: List[Dict[str, Any]] = []
+    for d in defects:
+        comp = f"Ring_{d.get('ring_id', '?')}"
+        name = d.get("defect_id") or f"DEFECT-{tunnel_id}-{uuid.uuid4().hex[:8]}"
+        created = (d.get("discovery_date") or d.get("created_on")
+                   or datetime.utcnow().date().isoformat())
+        rows.append({
+            "sheet": "COBie.Defect",
+            "Name": name,
+            "CreatedBy": d.get("inspector", "tunnel_dt"),
+            "CreatedOn": created,
+            "Degree": d.get("severity") or d.get("priority", ""),
+            "SourceName": d.get("source", "Inspection"),
+            "DefectTypeName": d.get("defect_type", "Unclassified"),
+            "ComponentName": comp,
+            "ExtSystem": "TunnelDT",
+            "ExtObject": d.get("tunnel_id", tunnel_id),
+            "ExtIdentifier": name,
+            "Description": (
+                f"K{float(d.get('chainage_m') or 0):.0f}m; "
+                f"{d.get('position', '-')}; priority {d.get('priority', '-')}"
+            ),
+        })
+        for key, label, unit in [
+            ("crack_width_mm", "CrackWidth", "mm"),
+            ("spall_depth_mm", "SpallDepth", "mm"),
+            ("area_cm2", "DefectExtent", "cm2"),
+        ]:
+            val = d.get(key)
+            if not val:
+                continue
+            try:
+                vtxt = f"{float(val):.2f} {unit}"
+            except (TypeError, ValueError):
+                continue
+            rows.append({
+                "sheet": "COBie.RealTimeData",
+                "Name": f"MEAS-{uuid.uuid4().hex[:8]}",
+                "ComponentName": comp,
+                "RealTimeDataValue": vtxt,
+                "CreatedOn": created,
+                "ExtSystem": "TunnelDT_Measurement",
+                "ExtIdentifier": f"{name}_{label}",
+            })
+    return rows
+
+
 def rows_to_dataframe(rows: List[Dict[str, Any]]):
     """Convert the mixed-sheet row list to a pandas DataFrame, grouped by sheet."""
     import pandas as pd
