@@ -24,9 +24,9 @@ def render_plain_guide(text: str) -> None:
     st.caption(f"💼 **In plain English:** {text}")
 
 
-# User journey through the app's pages. Solid = the main path,
-# dashed = optional branches. The work order is the goal, so it gets
-# the primary fill.
+# User journey through the app's pages: solid = the main capture-to-report
+# path; dashed = optional reference tools (6-9) that branch off it. The
+# Report & Presentation summary gets the primary fill as the goal.
 _USERFLOW_DOT = """
 digraph userflow {
     rankdir=LR;
@@ -52,8 +52,11 @@ digraph userflow {
     report   [label="Report and Presentation\\nPDF + slide deck",
               fillcolor="#534AB7", fontcolor="#FFFFFF"];
 
-    setup -> bim -> ingest -> register -> detail ->
-        library -> sparql -> cobie -> ontology -> report;
+    setup -> bim -> ingest -> register -> detail -> report;
+    detail -> library [style=dashed];
+    detail -> sparql [style=dashed];
+    ingest -> cobie [style=dashed];
+    detail -> ontology [style=dashed];
 }
 """
 
