@@ -335,40 +335,46 @@ def render_overview():
 # away), and finish with the report that summarises it all.
 nav = st.navigation({
     "Start here": [
-        st.Page(render_overview, title="1 · Overview", icon="🏠",
+        st.Page(render_overview, title="Overview", icon="🏠",
                 url_path="overview", default=True),
     ],
     "Set up the asset": [
         st.Page("pages/6_Tunnel_Setup.py",
-                title="2 · Tunnel Setup", icon="🛠️"),
+                title="1 · Tunnel Setup", icon="🛠️"),
         st.Page("pages/7_BIM_3D_Viewer.py",
-                title="3 · 3D Tunnel (BIM)", icon="🧊"),
+                title="2 · 3D Tunnel (BIM)", icon="🧊"),
     ],
     "Inspect & diagnose": [
         st.Page("pages/0_Ingest.py",
-                title="4 · Ingest a finding", icon="📤"),
+                title="3 · Ingest a finding", icon="📤"),
         st.Page("pages/1_Defect_Register.py",
-                title="5 · Defect Register", icon="🗺️"),
+                title="4 · Defect Register", icon="🗺️"),
         st.Page("pages/2_Defect_Detail.py",
-                title="6 · Defect Detail", icon="📋"),
+                title="5 · Defect Detail", icon="📋"),
         st.Page("pages/9_Standards_Library.py",
-                title="7 · Standards Library", icon="📚"),
+                title="6 · Standards Library", icon="📚"),
     ],
     "Specialists": [
-        st.Page("pages/3_SPARQL_Console.py", title="SPARQL Console", icon="🔎"),
+        st.Page("pages/3_SPARQL_Console.py",
+                title="7 · SPARQL Console", icon="🔎"),
         st.Page("pages/4_CV_to_COBie_Bridge.py",
-                title="CV → COBie Bridge", icon="🌉"),
+                title="8 · CV → COBie Bridge", icon="🌉"),
         st.Page("pages/5_Ontology_Browser.py",
-                title="Ontology Browser", icon="🧩"),
+                title="9 · Ontology Browser", icon="🧩"),
     ],
-    "Final step": [
-        st.Page("pages/8_Report.py", title="8 · Report (PDF)", icon="📄"),
+    "Summary": [
+        st.Page("pages/8_Report.py", title="Report and Presentation",
+                icon="📄"),
     ],
 })
 
+# Load the ontology BEFORE rendering the sidebar, so the System panel reflects
+# the real state. The Reload button sets ontology_loaded=False and reruns;
+# rendering the sidebar first would show "Ontology not loaded" until the next
+# interaction, even though the reload immediately below succeeds.
+ontology_ok = ensure_ontology_loaded()
 render_sidebar()
-
-if not ensure_ontology_loaded():
+if not ontology_ok:
     st.stop()
 
 try:

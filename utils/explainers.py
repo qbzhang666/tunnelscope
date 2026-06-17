@@ -36,18 +36,24 @@ digraph userflow {
           fontsize=12, margin="0.22,0.14"];
     edge [color="#534AB7", penwidth=1.3, arrowsize=0.8];
 
-    setup    [label="② Tunnel Setup\\nlocation & dimensions"];
-    bim      [label="③ 3D Tunnel\\nBIM model"];
-    ingest   [label="④ Ingest\\nregister defects"];
-    register [label="⑤ Defect Register\\nwhat & where"];
-    detail   [label="⑥ Defect Detail\\ndiagnosis, repair,\\nwork order"];
-    library  [label="⑦ Standards Library\\nsource documents",
+    setup    [label="① Tunnel Setup\\nlocation & dimensions"];
+    bim      [label="② 3D Tunnel\\nBIM model"];
+    ingest   [label="③ Ingest\\nregister defects"];
+    register [label="④ Defect Register\\nwhat & where"];
+    detail   [label="⑤ Defect Detail\\ndiagnosis, repair,\\nwork order"];
+    library  [label="⑥ Standards Library\\nsource documents",
               style="rounded,filled,dashed"];
-    report   [label="⑧ Report\\none PDF of everything",
+    sparql   [label="⑦ SPARQL Console\\nverify any figure",
+              style="rounded,filled,dashed"];
+    cobie    [label="⑧ CV → COBie\\nAI pipeline",
+              style="rounded,filled,dashed"];
+    ontology [label="⑨ Ontology Browser\\nknowledge model",
+              style="rounded,filled,dashed"];
+    report   [label="Report and Presentation\\nPDF + slide deck",
               fillcolor="#534AB7", fontcolor="#FFFFFF"];
 
-    setup -> bim -> ingest -> register -> detail -> report;
-    detail -> library [style=dashed];
+    setup -> bim -> ingest -> register -> detail ->
+        library -> sparql -> cobie -> ontology -> report;
 }
 """
 
@@ -56,18 +62,21 @@ def render_user_workflow() -> None:
     width so it renders at a readable size. Step numbers match the
     sidebar's numbered page labels."""
     st.markdown(
-        "**Set up once:** ② **Tunnel Setup** — location & dimensions · "
-        "③ **3D Tunnel (BIM)** — check the model.  \n"
-        "**Each inspection:** ④ **Ingest** findings → ⑤ **Defect "
-        "Register** — what & where → ⑥ **Defect Detail** — diagnosis, "
-        "standard-backed repair, work order (⑦ **Standards Library** "
-        "has the source documents).  \n"
-        "**Wrap up:** ⑧ **Report** — one PDF capturing everything. "
-        "This page (①) tracks the headline numbers throughout."
+        "**Set up once:** ① **Tunnel Setup** — location & dimensions · "
+        "② **3D Tunnel (BIM)** — check the model.  \n"
+        "**Each inspection:** ③ **Ingest** findings → ④ **Defect "
+        "Register** — what & where → ⑤ **Defect Detail** — diagnosis, "
+        "standard-backed repair, work order.  \n"
+        "**Optional tools (dashed):** ⑥ **Standards Library** (source "
+        "documents) · ⑦ **SPARQL Console** (verify any figure) · "
+        "⑧ **CV → COBie** (the AI pipeline) · ⑨ **Ontology Browser** "
+        "(the knowledge model).  \n"
+        "**Wrap up:** **Report and Presentation** — the summary deliverable "
+        "(PDF report + slide deck)."
     )
     st.caption(
-        "Specialists: verify any figure on **SPARQL Console** / "
-        "**Ontology Browser**; see the AI pipeline on **CV → COBie**."
+        "Steps ⑥–⑨ are optional reference tools (shown dashed) — use them "
+        "anytime. This Overview tracks the headline numbers throughout."
     )
     st.graphviz_chart(_USERFLOW_DOT, width="stretch")
 
