@@ -51,6 +51,7 @@ logs/
 # Exception: the manuscript LaTeX source is tracked; the bulky data is not.
 2026 Ontology Paper/*
 !2026 Ontology Paper/_Submission.tex
+!2026 Ontology Paper/_Revision 1.tex
 
 # Runtime-generated user data (tunnels created on the Tunnel Setup page)
 data/custom_tunnels.json
